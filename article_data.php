@@ -32,7 +32,16 @@ $hasil = $conn->query($sql);
                     <br>pada : <?= $row["tanggal"] ?>
                     <br>oleh : <?= $row["username"] ?>
                 </td>
-                <td><?= $row["isi"] ?></td>
+                <td>
+                    <?= $row["isi"] ?>
+                    <?php if (!empty($row["summary"])) : ?>
+                        <br><br>
+                        <div class="alert alert-light" role="alert">
+                            <strong><i class="bi bi-magic"></i> AI Summary:</strong><br>
+                            <?= $row["summary"] ?>
+                        </div>
+                    <?php endif; ?>
+                </td>
                 <td>
                     <?php
                     if ($row["gambar"] != '') {
@@ -67,6 +76,10 @@ $hasil = $conn->query($sql);
                                         <div class="mb-3">
                                             <label for="floatingTextarea2">Isi</label>
                                             <textarea class="form-control" placeholder="Tuliskan Isi Artikel" name="isi" required><?= $row["isi"] ?></textarea>
+                                        </div>
+                                        <div class="mb-3">
+                                            <label>Ringkasan (AI)</label>
+                                            <textarea class="form-control" name="summary"><?= $row["summary"] ?></textarea>
                                         </div>
                                         <div class="mb-3">
                                             <label for="formGroupExampleInput2" class="form-label">Ganti Gambar</label>

@@ -24,7 +24,16 @@
                             </div>
                             <div class="mb-3">
                                 <label for="floatingTextarea2">Isi</label>
-                                <textarea class="form-control" placeholder="Tuliskan Isi Artikel" name="isi" required></textarea>
+                                <textarea class="form-control" placeholder="Tuliskan Isi Artikel" name="isi" id="isiArtikel" required></textarea>
+                            </div>
+                            <div class="mb-3">
+                                <button type="button" class="btn btn-warning btn-sm" id="btnGenSummary">
+                                    <i class="bi bi-magic"></i> Buatkan Ringkasan (AI)
+                                </button>
+                            </div>
+                            <div class="mb-3">
+                                <label for="summaryResult">Ringkasan (AI)</label>
+                                <textarea class="form-control" placeholder="Hasil ringkasan akan muncul di sini..." name="summary" id="summaryResult"></textarea>
                             </div>
                             <div class="mb-3">
                                 <label for="formGroupExampleInput2" class="form-label">Gambar</label>
@@ -63,6 +72,39 @@
             var hlm = $(this).attr("id");
             load_data(hlm);
         });
+
+        // Logika AI
+        $('#btnGenSummary').click(function() {
+            var isi = $('#isiArtikel').val();
+            if (isi == '') {
+                alert('Harap isi artikel terlebih dahulu!');
+                return;
+            }
+
+            var btn = $(this);
+            var originalText = btn.html();
+            btn.prop('disabled', true).html('Loading...');
+
+            $.ajax({
+                url: 'ai_helper.php',
+                type: 'POST',
+                contentType: 'application/json',
+                data: JSON.stringify({ text: isi, mode: 'summary' }),
+                success: function(response) {
+                    if (response.result) {
+                        $('#summaryResult').val(response.result);
+                    } else if (response.error) {
+                        alert('AI Error: ' + response.error);
+                    }
+                    btn.prop('disabled', false).html(originalText);
+                },
+                error: function(xhr, status, error) {
+                    console.log(xhr.responseText);
+                    alert('Gagal menghubungi AI Helper.');
+                    btn.prop('disabled', false).html(originalText);
+                }
+            });
+        });
     });
 </script>
 
@@ -73,6 +115,7 @@ include "upload_foto.php";
 if (isset($_POST['simpan'])) {
     $judul = $_POST['judul'];
     $isi = $_POST['isi'];
+    $summary = $_POST['summary'];
     $tanggal = date("Y-m-d H:i:s");
     $username = $_SESSION['username'];
     $gambar = '';
@@ -117,19 +160,20 @@ if (isset($_POST['simpan'])) {
                                 SET 
                                 judul =?,
                                 isi =?,
+                                summary = ?,
                                 gambar = ?,
                                 tanggal = ?,
                                 username = ?
                                 WHERE id = ?");
 
-        $stmt->bind_param("sssssi", $judul, $isi, $gambar, $tanggal, $username, $id);
+        $stmt->bind_param("ssssssi", $judul, $isi, $summary, $gambar, $tanggal, $username, $id);
         $simpan = $stmt->execute();
     } else {
         //jika tidak ada id, lakukan insert data baru
-        $stmt = $conn->prepare("INSERT INTO article (judul,isi,gambar,tanggal,username)
-                                VALUES (?,?,?,?,?)");
+        $stmt = $conn->prepare("INSERT INTO article (judul,isi,summary,gambar,tanggal,username)
+                                VALUES (?,?,?,?,?,?)");
 
-        $stmt->bind_param("sssss", $judul, $isi, $gambar, $tanggal, $username);
+        $stmt->bind_param("ssssss", $judul, $isi, $summary, $gambar, $tanggal, $username);
         $simpan = $stmt->execute();
     }
 

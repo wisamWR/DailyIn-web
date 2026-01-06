@@ -32,6 +32,9 @@ CREATE TABLE `article` (
   `judul` text CHARACTER SET latin1 COLLATE latin1_swedish_ci DEFAULT NULL,
   `isi` text CHARACTER SET latin1 COLLATE latin1_swedish_ci DEFAULT NULL,
   `gambar` text CHARACTER SET latin1 COLLATE latin1_swedish_ci DEFAULT NULL,
+  `tags` varchar(255) DEFAULT NULL,
+  `summary` text DEFAULT NULL,
+  `mood` varchar(50) DEFAULT NULL,
   `tanggal` datetime DEFAULT NULL,
   `username` varchar(50) CHARACTER SET latin1 COLLATE latin1_swedish_ci DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
