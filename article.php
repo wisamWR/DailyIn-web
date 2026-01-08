@@ -34,12 +34,12 @@
                             </div>
                             <div class="mb-3">
                                 <button type="button" class="btn btn-warning btn-sm" id="btnGenSummary">
-                                    <i class="bi bi-magic"></i> Buatkan Ringkasan (AI)
+                                    <i class="bi bi-magic"></i> Buatkan Caption (AI) ✨
                                 </button>
                             </div>
                             <div class="mb-3">
-                                <label for="summaryResult">Ringkasan (AI)</label>
-                                <textarea class="form-control" placeholder="Hasil ringkasan akan muncul di sini..." name="summary" id="summaryResult"></textarea>
+                                <label for="summaryResult">Caption (AI)</label>
+                                <textarea class="form-control" placeholder="Caption artikel..." name="summary" id="summaryResult"></textarea>
                             </div>
                             <div class="mb-3">
                                 <label for="formGroupExampleInput2" class="form-label">Gambar</label>
@@ -95,7 +95,7 @@
                 url: 'ai_helper.php',
                 type: 'POST',
                 contentType: 'application/json',
-                data: JSON.stringify({ text: isi, mode: 'summary' }),
+                data: JSON.stringify({ text: isi, mode: 'generate_caption' }),
                 success: function(response) {
                     if (response.result) {
                         $('#summaryResult').val(response.result);
@@ -204,7 +204,7 @@
                 url: 'ai_helper.php',
                 type: 'POST',
                 contentType: 'application/json',
-                data: JSON.stringify({ text: isi, mode: 'summary' }),
+                data: JSON.stringify({ text: isi, mode: 'generate_caption' }),
                 success: function(response) {
                     if (response.result) {
                         targetSummary.val(response.result);

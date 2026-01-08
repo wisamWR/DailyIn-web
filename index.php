@@ -117,7 +117,7 @@ include 'koneksi.php';
   <!-- article begin -->
   <section id="article" class="text-center p-5">
     <div class="container">
-      <h1 class="fw-bold display-4 pb-3">article</h1>
+      <h1 class="fw-bold display-4 pb-3">Article</h1>
       <div class="row row-cols-1 row-cols-md-3 g-4 justify-content-center">
         <?php
         $sql = "SELECT * FROM article ORDER BY tanggal DESC";
@@ -131,8 +131,16 @@ include 'koneksi.php';
               <div class="card-body">
                 <h5 class="card-title"><?= $row["judul"] ?></h5>
                 <p class="card-text">
-                  <?= $row["isi"] ?>
+                  <?= $row["summary"] != '' ? $row["summary"] : 'Artikel ini belum memiliki ringkasan.' ?>
                 </p>
+                <a href="#" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#articleModal" 
+                   data-id="<?= $row["id"] ?>"
+                   data-judul="<?= htmlspecialchars($row["judul"]) ?>" 
+                   data-isi="<?= htmlspecialchars($row["isi"]) ?>"
+                   data-gambar="<?= $row["gambar"] ?>"
+                   data-tanggal="<?= $row["tanggal"] ?>">
+                   Baca Selengkapnya
+                </a>
               </div>
               <div class="card-footer">
                 <small class="text-body-secondary">
@@ -358,6 +366,30 @@ include 'koneksi.php';
     <div>Mohammad Wisam Wiraghina &copy; 2025</div>
   </footer>
   <!-- footer end -->
+
+  <!-- Modal Detail Artikel -->
+  <div class="modal fade" id="articleModal" tabindex="-1" aria-labelledby="exampleModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h1 class="modal-title fs-5" id="articleModalLabel">Judul Artikel</h1>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+            <img src="" id="modalGambar" class="img-fluid mb-3 w-100 rounded" alt="Gambar Artikel">
+            <h6 class="text-muted mb-3" id="modalTanggal"></h6>
+            <div id="modalIsi" style="text-align: justify;"></div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-warning" id="btnBuatRingkasan">Buat Ringkasan ✨</button>
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Tutup</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+
+
   <script
     src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/js/bootstrap.bundle.min.js"
     integrity="sha384-FKyoEForCGlyvwx9Hj09JcYn3nv7wiPVlz7YYwJrWVcXK/BmnVDxM+D2scQbITxI"
@@ -395,6 +427,106 @@ include 'koneksi.php';
 
     darkIcon.addEventListener("click", () => {
       html.setAttribute("data-bs-theme", "dark");
+    });
+
+    // Script untuk mengisi data modal
+    const articleModal = document.getElementById('articleModal');
+    articleModal.addEventListener('show.bs.modal', event => {
+        // Tombol yang memicu modal
+        const button = event.relatedTarget;
+        
+        // Ambil data dari atribut data-bs-*
+        const id = button.getAttribute('data-id');
+        const judul = button.getAttribute('data-judul');
+        const isi = button.getAttribute('data-isi');
+        const gambar = button.getAttribute('data-gambar');
+        const tanggal = button.getAttribute('data-tanggal');
+
+        // Update isi modal
+        const modalTitle = articleModal.querySelector('.modal-title');
+        const modalBodyIsi = articleModal.querySelector('#modalIsi');
+        const modalBodyGambar = articleModal.querySelector('#modalGambar');
+        const modalBodyTanggal = articleModal.querySelector('#modalTanggal');
+
+        modalTitle.textContent = judul;
+        modalBodyIsi.innerHTML = isi; // Gunakan innerHTML agar tag HTML di isi (jika ada) ter-render
+        modalBodyGambar.src = "img/" + gambar;
+        modalBodyTanggal.textContent = "Diposting pada: " + tanggal;
+
+        // Setup tombol Buat Ringkasan (Inline Toggle)
+        const btnRingkasan = document.getElementById('btnBuatRingkasan');
+        
+        // Reset state tombol setiap kali modal dibuka
+        btnRingkasan.textContent = "Buat Ringkasan ✨";
+        btnRingkasan.className = "btn btn-warning";
+        
+        // Variabel untuk menyimpan state ringkasan di closure ini
+        let summaryContent = '';
+        const originalContent = isi; // Simpan konten asli
+
+        btnRingkasan.onclick = async function() {
+            // Cek text tombol untuk menentukan 'Mode'
+            if (btnRingkasan.textContent.includes("Buat Ringkasan")) {
+                
+                // Jika ringkasan belum ada, generate dulu
+                if (!summaryContent) {
+                    const originalBtnText = btnRingkasan.innerHTML;
+                    btnRingkasan.disabled = true;
+                    btnRingkasan.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Meringkas...';
+                    
+                    try {
+                        const response = await fetch('ai_helper.php', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                mode: 'generate_summary',
+                                title: judul,
+                                text: modalBodyIsi.innerText // Kirim plain text dari konten yang tampil
+                            })
+                        });
+                        
+                        const data = await response.json();
+                        
+                        if (data.result) {
+                            // Format bullet points HTML
+                            summaryContent = '<div class="alert alert-info"><small>⚡ Ringkasan AI:</small><br>' + 
+                                             data.result.split('\n')
+                                                .filter(line => line.trim())
+                                                .map(line => line.trim())
+                                                .join('<br>') + 
+                                             '</div>';
+                        } else if (data.error) {
+                            alert('AI Error: ' + data.error);
+                            btnRingkasan.disabled = false;
+                            btnRingkasan.innerHTML = originalBtnText;
+                            return; // Stop
+                        } else {
+                            alert('Gagal mengambil ringkasan.');
+                            btnRingkasan.disabled = false;
+                            btnRingkasan.innerHTML = originalBtnText;
+                            return; // Stop
+                        }
+                    } catch (error) {
+                        alert('Error: ' + error.message);
+                        btnRingkasan.disabled = false;
+                        btnRingkasan.innerHTML = originalBtnText;
+                        return; // Stop
+                    }
+                }
+                
+                // Tampilkan Ringkasan & Ubah Tombol
+                modalBodyIsi.innerHTML = summaryContent;
+                btnRingkasan.disabled = false;
+                btnRingkasan.textContent = "Kembali ke Artikel ↩️";
+                btnRingkasan.className = "btn btn-success";
+
+            } else {
+                // Mode 'Kembali ke Artikel'
+                modalBodyIsi.innerHTML = originalContent; // Restore asli
+                btnRingkasan.textContent = "Buat Ringkasan ✨";
+                btnRingkasan.className = "btn btn-warning";
+            }
+        };
     });
   </script>
 </body>

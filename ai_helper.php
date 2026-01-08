@@ -1,5 +1,8 @@
 <?php
 header('Content-Type: application/json');
+// Disable error reporting for JSON endpoint
+error_reporting(0);
+ini_set('display_errors', 0);
 
 // ==================================================================
 // ==================================================================
@@ -21,10 +24,92 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     // Tentukan Prompt sesuai mode
     $prompt = "";
-    if ($mode == 'summary') {
-        $prompt = "Buatkan ringkasan informatif dalam Bahasa Indonesia (2-3 kalimat) yang menjelaskan poin utama dari artikel berikut. Jangan gunakan gaya promosi, fokus pada isi konten: \n\n" . $text;
+    if ($mode == 'generate_caption') {
+        $prompt = "Kamu adalah copywriter profesional yang membuat caption menarik untuk media sosial.
+
+Tugas: Buatkan 1 kalimat caption yang CATCHY dan ENGAGING berdasarkan artikel berikut.
+
+ATURAN KETAT:
+- Maksimal 15 kata
+- 1 kalimat saja (boleh tanpa titik di akhir)
+- Gaya bahasa: Casual tapi informatif
+- Harus menarik perhatian (seperti caption Instagram/Facebook)
+- Jangan gunakan kata 'artikel ini', 'tulisan ini', atau sejenisnya
+- Langsung ke inti artikel
+- Boleh gunakan emoji (1-2 emoji maksimal)
+
+CONTOH CAPTION YANG BAIK:
+- 'Rahasia produktif belajar online yang jarang orang tahu 📚'
+- '5 cara simpel tingkatkan fokus belajar dari rumah'
+- 'Belajar online tapi tetap efektif, ini caranya! ✨'
+
+JUDUL ARTIKEL: {$title}
+
+ISI ARTIKEL (potongan):
+" . mb_substr($text, 0, 300) . "...
+
+Sekarang buatkan caption dalam 1 kalimat (maksimal 15 kata):";
     } else if ($mode == 'generate_content') {
-        $prompt = "Buatkan artikel lengkap, informatif, dan menarik dalam Bahasa Indonesia tentang topik: '$text'. \n\nArtikel harus: \n- Memiliki paragraf pembuka, isi, dan penutup. \n- Panjang sekitar 3-4 paragraf. \n- Gaya bahasa santai tapi sopan (cocok untuk daily journal). \n- Jangan gunakan markdown heading (seperti # atau ##), gunakan paragraf biasa saja.";
+        $prompt = "Kamu adalah penulis artikel profesional untuk blog Daily Journal Indonesia.
+
+Tugas: Tulis artikel LENGKAP dan BERKUALITAS berdasarkan judul ini.
+
+ATURAN KETAT:
+1. Panjang: 600-800 kata (WAJIB)
+2. Struktur HARUS seperti ini:
+   - Paragraf Pembuka (2-3 kalimat pengantar menarik)
+   - 3-4 Subjudul dengan konten masing-masing
+   - Paragraf Penutup (kesimpulan/ajakan)
+3. Bahasa Indonesia baku tapi tidak kaku
+4. Setiap paragraf: 4-6 kalimat
+5. Gaya penulisan: Seperti artikel Kompas, Tirto, atau Medium Indonesia
+6. Konten HARUS spesifik dan detail (tidak generic)
+7. Sertakan contoh konkret atau tips praktis
+
+FORMAT OUTPUT:
+<p>Paragraf pembuka yang menarik perhatian pembaca...</p>
+
+<h2>Subjudul Pertama</h2>
+<p>Isi konten detail paragraf pertama...</p>
+<p>Isi konten detail paragraf kedua...</p>
+
+<h2>Subjudul Kedua</h2>
+<p>Isi konten detail...</p>
+
+<h2>Subjudul Ketiga</h2>
+<p>Isi konten detail...</p>
+
+<p>Paragraf penutup dengan kesimpulan atau call-to-action...</p>
+
+PENTING:
+- JANGAN gunakan list/bullet points di dalam paragraf
+- JANGAN gunakan <h1> (hanya <h2> untuk subjudul)
+- JANGAN menulis meta description atau intro yang bilang 'artikel ini akan membahas...'
+- Langsung mulai dengan konten yang engaging
+
+JUDUL ARTIKEL: {$title}
+KATEGORI: {$category}
+
+Mulai menulis artikel sekarang dengan format HTML di atas:";
+    } else if ($mode == 'generate_summary') {
+        $prompt = "Kamu adalah asisten yang meringkas artikel menjadi poin-poin penting.
+
+Tugas: Buatkan ringkasan artikel dalam bentuk bullet points.
+
+ATURAN KETAT:
+- Buat 3-5 poin utama
+- Setiap poin: 1 kalimat singkat (8-12 kata)
+- Format: gunakan bullet '•' di awal setiap poin
+- Bahasa Indonesia yang ringkas dan jelas
+- Fokus pada informasi penting, bukan detail kecil
+- JANGAN ada pengantar atau penutup
+- Langsung list poin-poinnya
+
+ARTIKEL:
+Judul: {$title}
+Isi: " . mb_substr($text, 0, 1000) . "...
+
+Buatkan ringkasan dalam format bullet points:";
     } else {
         $prompt = "Ringkas teks ini: " . $text;
     }
@@ -78,9 +163,43 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         $result = json_decode($response, true);
 
-        // Jika berhasil dapat teks
+            // Jika berhasil dapat teks
         if (isset($result['candidates'][0]['content']['parts'][0]['text'])) {
             $generatedText = $result['candidates'][0]['content']['parts'][0]['text'];
+            
+            // Tambahkan validasi panjang caption
+            if ($mode === 'generate_caption') {
+                $words = str_word_count($generatedText);
+                if ($words > 20) {
+                    // Fallback: potong jadi 15 kata pertama
+                    $words_array = explode(' ', $generatedText);
+                    $generatedText = implode(' ', array_slice($words_array, 0, 15));
+                }
+            }
+
+            // Post-Processing untuk generate_content
+            if ($mode === 'generate_content') {
+                // Remove markdown code blocks jika ada
+                $generatedText = preg_replace('/```html|```/i', '', $generatedText);
+                
+                // Pastikan minimal ada 2 <h2> dan 3 <p>
+                $h2_count = substr_count($generatedText, '<h2>');
+                $p_count = substr_count($generatedText, '<p>');
+                
+                if ($h2_count < 2 || $p_count < 3) {
+                     // Jika gagal validasi, jangan kirim hasil, tapi coba model lain?
+                     // Untuk saat ini, kita anggap ini kegagalan model ini, dan continue ke model berikutnya?
+                     // Atau return error langsung jika ini adalah iterasi terakhir?
+                     // Sesuai instruksi user "return error", tapi ini dalam loop models.
+                     // Kita set error dan continue
+                     $final_result = ['error' => 'Artikel yang dihasilkan tidak memenuhi standar struktur.'];
+                     continue; 
+                }
+                
+                // Clean up
+                $generatedText = trim($generatedText);
+            }
+
             echo json_encode(['result' => trim($generatedText), 'model_used' => $model_name]);
             $success = true;
             break; // Stop loop, kita sudah berhasil
