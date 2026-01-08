@@ -1,4 +1,3 @@
-<div class="container">
     <!-- Button trigger modal -->
     <button type="button" class="btn btn-secondary mb-2" data-bs-toggle="modal" data-bs-target="#modalTambah">
         <i class="bi bi-plus-lg"></i> Tambah Article
@@ -56,9 +55,25 @@
         </div>
         <!-- Akhir Modal Tambah-->
     </div>
-</div>
 
 <script>
+    function toggleContent(el) {
+        var $el = $(el);
+        var $td = $el.closest('td');
+        var $short = $td.find('.short-text');
+        var $full = $td.find('.full-text');
+        var $icon = $el.find('i');
+
+        $short.toggleClass('d-none');
+        $full.toggleClass('d-none');
+        
+        if ($full.hasClass('d-none')) {
+            $icon.removeClass('bi-chevron-up').addClass('bi-chevron-down');
+        } else {
+            $icon.removeClass('bi-chevron-down').addClass('bi-chevron-up');
+        }
+    }
+
     $(document).ready(function() {
         load_data();
 
@@ -145,10 +160,6 @@
             });
         });
 
-        // ==========================================================
-        // FITUR AI UNTUK MODAL EDIT (Dynamic Content)
-        // Gunakan Event Delegation karena modal edit diload via AJAX
-        // ==========================================================
 
         // 1. Generate Content di Edit Modal
         $(document).on('click', '.btn-kreasikan-edit', function() {

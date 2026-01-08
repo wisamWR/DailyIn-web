@@ -95,10 +95,10 @@ include 'koneksi.php';
   </nav>
   <!-- nav end -->
   <!-- hero begin -->
-  <section id="hero" class="text-center p-5 bg-primary-subtle text-sm-start">
+  <section id="hero" class="text-center p-3 p-sm-5 bg-primary-subtle text-sm-start">
     <div class="container">
       <div class="d-sm-flex flex-sm-row-reverse align-items-center">
-        <img src="img/banner.jpg" class="img-fluid" width="300" />
+        <img src="img/banner.jpg" class="img-fluid mb-4 mb-sm-0" width="300" />
         <div>
           <h1 class="fw-bold display-4">Setiap Mimpi Layak Dicatat</h1>
           <h4 class="lead display-6">
@@ -115,9 +115,10 @@ include 'koneksi.php';
   </section>
   <!-- hero end -->
   <!-- article begin -->
-  <section id="article" class="text-center p-5">
+  <section id="article" class="text-center p-3 p-sm-5">
     <div class="container">
       <h1 class="fw-bold display-4 pb-3">Article</h1>
+
       <div class="row row-cols-1 row-cols-md-3 g-4 justify-content-center">
         <?php
         $sql = "SELECT * FROM article ORDER BY tanggal DESC";
@@ -157,7 +158,7 @@ include 'koneksi.php';
   </section>
   <!-- article end -->
   <!-- gallery begin -->
-  <section id="gallery" class="text-center p-5 bg-primary-subtle">
+  <section id="gallery" class="text-center p-3 p-sm-5 bg-primary-subtle">
     <div class="container">
       <h1 class="fw-bold display-4 pb-3">Gallery</h1>
       <div id="carouselExample" class="carousel slide">
@@ -202,7 +203,7 @@ include 'koneksi.php';
   <!-- gallery end -->
 
   <!-- schedule begin -->
-  <section id="schedule" class="text-center p-5">
+  <section id="schedule" class="text-center p-3 p-sm-5">
     <div class="container">
       <h1 class="fw-bold display-5 pb-4">
         Jadwal Kuliah & Kegiatan Mahasiswa
@@ -307,7 +308,7 @@ include 'koneksi.php';
   <!-- schedule end -->
 
   <!-- profile begin -->
-  <section id="profile" class="text-center p-5 bg-body-secondary">
+  <section id="profile" class="text-center p-3 p-sm-5 bg-body-secondary">
     <div class="container">
       <h1 class="fw-bold display-5 pb-4">Profil Mahasiswa</h1>
       <div class="row align-items-center justify-content-center">
@@ -357,7 +358,7 @@ include 'koneksi.php';
   </section>
   <!-- profile end -->
   <!-- footer begin -->
-  <footer class="text-center p-5">
+  <footer class="text-center p-3 p-sm-5">
     <div>
       <a href="https://www.instagram.com/udinusofficial"><i class="bi bi-instagram h2 p-2 text-dark"></i></a>
       <a href="https://www.twitter.com/udinusofficial"><i class="bi bi-twitter-x h2 p-2 text-dark"></i></a>

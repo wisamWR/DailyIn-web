@@ -1,4 +1,3 @@
-<div class="container">
     <!-- Button trigger modal -->
     <button type="button" class="btn btn-secondary mb-2" data-bs-toggle="modal" data-bs-target="#modalTambah">
         <i class="bi bi-plus-lg"></i> Tambah Gallery
@@ -37,7 +36,6 @@
         </div>
         <!-- Akhir Modal Tambah-->
     </div>
-</div>
 
 <script>
     $(document).ready(function() {

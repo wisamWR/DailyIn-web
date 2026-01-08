@@ -33,7 +33,17 @@ $hasil = $conn->query($sql);
                     <br>oleh : <?= $row["username"] ?>
                 </td>
                 <td>
-                    <?= $row["isi"] ?>
+                    <?php
+                    $isi = $row["isi"];
+                    if (strlen($isi) > 150) {
+                        $short = substr($isi, 0, 150) . '...';
+                        echo '<span class="short-text">' . $short . '</span>';
+                        echo '<span class="full-text d-none">' . $isi . '</span>';
+                        echo ' <a href="#" onclick="toggleContent(this); return false;" class="text-decoration-none ms-1"><i class="bi bi-chevron-down"></i></a>';
+                    } else {
+                        echo $isi;
+                    }
+                    ?>
                     <?php if (!empty($row["summary"])) : ?>
                         <br><br>
                         <div class="alert alert-light" role="alert">

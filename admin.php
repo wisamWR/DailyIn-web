@@ -86,8 +86,7 @@ if (!isset($_SESSION['username'])) {
     </nav>
     <!-- nav end -->
     <!-- content begin -->
-    <!-- content begin -->
-    <section id="content" class="p-5">
+    <section id="content" class="p-3 p-sm-5">
         <div class="container">
             <?php
             if (isset($_GET['page'])) {
@@ -105,9 +104,8 @@ if (!isset($_SESSION['username'])) {
         </div>
     </section>
     <!-- content end -->
-    <!-- content end -->
     <!-- footer begin -->
-    <footer class="text-center text-align-center justify-content-center p-5 bg-primary-subtle">
+    <footer class="text-center text-align-center justify-content-center p-3 p-sm-5 bg-primary-subtle">
         <div>
             <a href="https://www.instagram.com/udinusofficial"><i class="bi bi-instagram h2 p-2 text-dark"></i></a>
             <a href="https://twitter.com/udinusofficial"><i class="bi bi-twitter h2 p-2 text-dark"></i></a>
