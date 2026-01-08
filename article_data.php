@@ -35,13 +35,27 @@ $hasil = $conn->query($sql);
                 <td>
                     <?php
                     $isi = $row["isi"];
-                    if (strlen($isi) > 150) {
-                        $short = substr($isi, 0, 150) . '...';
-                        echo '<span class="short-text">' . $short . '</span>';
-                        echo '<span class="full-text d-none">' . $isi . '</span>';
-                        echo ' <a href="#" onclick="toggleContent(this); return false;" class="text-decoration-none ms-1"><i class="bi bi-chevron-down"></i></a>';
+                    $clean_isi = strip_tags($isi); // Bersihkan tag HTML untuk tampilan pendek
+                    
+                    if (strlen($clean_isi) > 150) {
+                        $short = substr($clean_isi, 0, 150) . '...';
+                        ?>
+                        <div class="short-text">
+                            <?= $short ?>
+                            <a href="#" onclick="toggleContent(this); return false;" class="text-decoration-none fw-bold"><i class="bi bi-chevron-down"></i></a>
+                        </div>
+                        <div class="full-text d-none">
+                            <?= $isi ?>
+                            <a href="#" onclick="toggleContent(this); return false;" class="text-decoration-none fw-bold"><i class="bi bi-chevron-up"></i></a>
+                        </div>
+                        <?php
                     } else {
-                        echo $isi;
+                        // Jika pendek, tampilkan plain/html sesuai kebutuhan. 
+                        // Karena di tabel sebaiknya rapi, kita bisa strip_tags juga atau biarkan (biasanya strip_tags lebih rapi di tabel)
+                        // Tapi agar konsisten dengan "Full text", kita tampilkan apa adanya tapi mungkin di-limit di CSS jika mau.
+                        // User minta "sebagian saja", jadi logic di atas sudah menghandle yang panjang.
+                        // Yang pendek kita tampilkan apa adanya.
+                        echo $isi; 
                     }
                     ?>
                     <?php if (!empty($row["summary"])) : ?>

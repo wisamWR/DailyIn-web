@@ -52,45 +52,34 @@ Sekarang buatkan caption dalam 1 kalimat (maksimal 15 kata):";
     } else if ($mode == 'generate_content') {
         $prompt = "Kamu adalah penulis artikel profesional untuk blog Daily Journal Indonesia.
 
-Tugas: Tulis artikel LENGKAP dan BERKUALITAS berdasarkan judul ini.
+Tugas: Tulis artikel LENGKAP dan BERKUALITAS yang SANGAT RELEVAN dengan judul yang diberikan.
 
 ATURAN KETAT:
-1. Panjang: 600-800 kata (WAJIB)
-2. Struktur HARUS seperti ini:
-   - Paragraf Pembuka (2-3 kalimat pengantar menarik)
-   - 3-4 Subjudul dengan konten masing-masing
-   - Paragraf Penutup (kesimpulan/ajakan)
-3. Bahasa Indonesia baku tapi tidak kaku
-4. Setiap paragraf: 4-6 kalimat
-5. Gaya penulisan: Seperti artikel Kompas, Tirto, atau Medium Indonesia
-6. Konten HARUS spesifik dan detail (tidak generic)
-7. Sertakan contoh konkret atau tips praktis
+1. Tulis HANYA tentang topik di judul. Jangan melebar ke topik lain.
+2. Panjang: 600-800 kata (WAJIB).
+3. Struktur HARUS seperti ini:
+   - Paragraf Pembuka (langsung bahas inti topik dari judul)
+   - 3-4 Subjudul yang spesifik membahas aspek-aspek dari judul
+   - Paragraf Penutup (kesimpulan yang kuat)
+4. Bahasa Indonesia baku tapi mengalir (enak dibaca).
+5. Gaya penulisan: Seperti artikel feature di Kompas atau Tirto.
+6. Hindari basa-basi seperti 'Pada artikel ini kita akan membahas...'.
+7. Berikan data, contoh, atau konteks nyata yang relevan dengan judul.
 
-FORMAT OUTPUT:
-<p>Paragraf pembuka yang menarik perhatian pembaca...</p>
+FORMAT OUTPUT (HTML):
+<p>Paragraf pembuka...</p>
 
-<h2>Subjudul Pertama</h2>
-<p>Isi konten detail paragraf pertama...</p>
-<p>Isi konten detail paragraf kedua...</p>
+<h2>Subjudul 1</h2>
+<p>Isi...</p>
 
-<h2>Subjudul Kedua</h2>
-<p>Isi konten detail...</p>
+<h2>Subjudul 2</h2>
+<p>Isi...</p>
 
-<h2>Subjudul Ketiga</h2>
-<p>Isi konten detail...</p>
+<p>Penutup...</p>
 
-<p>Paragraf penutup dengan kesimpulan atau call-to-action...</p>
+JUDUL ARTIKEL: \"{$text}\"
 
-PENTING:
-- JANGAN gunakan list/bullet points di dalam paragraf
-- JANGAN gunakan <h1> (hanya <h2> untuk subjudul)
-- JANGAN menulis meta description atau intro yang bilang 'artikel ini akan membahas...'
-- Langsung mulai dengan konten yang engaging
-
-JUDUL ARTIKEL: {$title}
-KATEGORI: {$category}
-
-Mulai menulis artikel sekarang dengan format HTML di atas:";
+Mulai menulis artikel sekarang, pastikan isinya 100% nyambung dengan judul di atas:";
     } else if ($mode == 'generate_summary') {
         $prompt = "Kamu adalah asisten yang meringkas artikel menjadi poin-poin penting.
 
