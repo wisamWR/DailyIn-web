@@ -2,11 +2,11 @@
 header('Content-Type: application/json');
 
 // ==================================================================
-// KONFIGURASI API KEY
-// Silakan ganti string di bawah ini dengan API Key Gemini Anda.
-// Cara dapat API Key: https://aistudio.google.com/app/apikey
 // ==================================================================
-$apiKey = "AIzaSyAKZhGsSNlxGZB6hBZ1AkqlEWXuTte1Tzk"; 
+// KONFIGURASI AI
+// ==================================================================
+require_once 'config_ai.php';
+$apiKey = GEMINI_API_KEY;
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     // Ambil input JSON dari frontend
@@ -23,8 +23,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $prompt = "";
     if ($mode == 'summary') {
         $prompt = "Buatkan ringkasan informatif dalam Bahasa Indonesia (2-3 kalimat) yang menjelaskan poin utama dari artikel berikut. Jangan gunakan gaya promosi, fokus pada isi konten: \n\n" . $text;
-    } else if ($mode == 'tags') {
-        $prompt = "Berikan 3 kata kunci (tags) yang relevan (pisahkan dengan koma) untuk artikel berikut: \n\n" . $text;
+    } else if ($mode == 'generate_content') {
+        $prompt = "Buatkan artikel lengkap, informatif, dan menarik dalam Bahasa Indonesia tentang topik: '$text'. \n\nArtikel harus: \n- Memiliki paragraf pembuka, isi, dan penutup. \n- Panjang sekitar 3-4 paragraf. \n- Gaya bahasa santai tapi sopan (cocok untuk daily journal). \n- Jangan gunakan markdown heading (seperti # atau ##), gunakan paragraf biasa saja.";
     } else {
         $prompt = "Ringkas teks ini: " . $text;
     }
@@ -34,7 +34,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $models_to_try = [
         "gemini-2.0-flash-lite-001",
         "gemini-flash-latest",
-        "gemini-2.0-flash", 
+        "gemini-2.0-flash",
         "gemini-2.5-flash"
     ];
 
@@ -61,7 +61,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         curl_setopt($ch, CURLOPT_POST, true);
         curl_setopt($ch, CURLOPT_HTTPHEADER, ['Content-Type: application/json']);
         curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($payload));
-        
+
         // FIX untuk XAMPP di Windows (Lewati verifikasi SSL)
         curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
         curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 0);
@@ -84,8 +84,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             echo json_encode(['result' => trim($generatedText), 'model_used' => $model_name]);
             $success = true;
             break; // Stop loop, kita sudah berhasil
-        } 
-        
+        }
+
         // Simpan error terakhir untuk debugging
         if (isset($result['error'])) {
             $final_result = ['error' => 'Google API Error (' . $model_name . '): ' . ($result['error']['message'] ?? 'Unknown'), 'raw_response' => $result];
@@ -99,4 +99,3 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 } else {
     echo json_encode(['error' => 'Method not allowed']);
 }
-?>

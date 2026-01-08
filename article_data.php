@@ -74,8 +74,18 @@ $hasil = $conn->query($sql);
                                             <input type="text" class="form-control" name="judul" placeholder="Tuliskan Judul Artikel" value="<?= $row["judul"] ?>" required>
                                         </div>
                                         <div class="mb-3">
+                                            <button type="button" class="btn btn-info btn-sm btn-kreasikan-edit">
+                                                <i class="bi bi-robot"></i> Buatkan Isi (AI)
+                                            </button>
+                                        </div>
+                                        <div class="mb-3">
                                             <label for="floatingTextarea2">Isi</label>
                                             <textarea class="form-control" placeholder="Tuliskan Isi Artikel" name="isi" required><?= $row["isi"] ?></textarea>
+                                        </div>
+                                        <div class="mb-3">
+                                            <button type="button" class="btn btn-warning btn-sm btn-ringkas-edit">
+                                                <i class="bi bi-magic"></i> Buatkan Ringkasan (AI)
+                                            </button>
                                         </div>
                                         <div class="mb-3">
                                             <label>Ringkasan (AI)</label>

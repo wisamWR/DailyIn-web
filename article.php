@@ -20,7 +20,13 @@
                         <div class="modal-body">
                             <div class="mb-3">
                                 <label for="formGroupExampleInput" class="form-label">Judul</label>
-                                <input type="text" class="form-control" name="judul" placeholder="Tuliskan Judul Artikel" required>
+                                <input type="text" class="form-control" name="judul" id="judulArtikel" placeholder="Tuliskan Judul Artikel" required>
+                            </div>
+                            <!-- Tombol Generate Content -->
+                            <div class="mb-3">
+                                <button type="button" class="btn btn-info btn-sm" id="btnGenContent">
+                                    <i class="bi bi-robot"></i> Buatkan Isi Artikel (AI)
+                                </button>
                             </div>
                             <div class="mb-3">
                                 <label for="floatingTextarea2">Isi</label>
@@ -73,7 +79,7 @@
             load_data(hlm);
         });
 
-        // Logika AI
+        // Logika AI Summary
         $('#btnGenSummary').click(function() {
             var isi = $('#isiArtikel').val();
             if (isi == '') {
@@ -100,6 +106,114 @@
                 },
                 error: function(xhr, status, error) {
                     console.log(xhr.responseText);
+                    alert('Gagal menghubungi AI Helper.');
+                    btn.prop('disabled', false).html(originalText);
+                }
+            });
+        });
+
+        // Logika AI Generate Content
+        $('#btnGenContent').click(function() {
+            var judul = $('#judulArtikel').val();
+            if (judul == '') {
+                alert('Harap isi Judul terlebih dahulu!');
+                return;
+            }
+
+            var btn = $(this);
+            var originalText = btn.html();
+            btn.prop('disabled', true).html('<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Sedang menulis...');
+
+            $.ajax({
+                url: 'ai_helper.php',
+                type: 'POST',
+                contentType: 'application/json',
+                data: JSON.stringify({ text: judul, mode: 'generate_content' }),
+                success: function(response) {
+                    if (response.result) {
+                        $('#isiArtikel').val(response.result);
+                    } else if (response.error) {
+                        alert('AI Error: ' + response.error);
+                    }
+                    btn.prop('disabled', false).html(originalText);
+                },
+                error: function(xhr, status, error) {
+                    console.log(xhr.responseText);
+                    alert('Gagal menghubungi AI Helper.');
+                    btn.prop('disabled', false).html(originalText);
+                }
+            });
+        });
+
+        // ==========================================================
+        // FITUR AI UNTUK MODAL EDIT (Dynamic Content)
+        // Gunakan Event Delegation karena modal edit diload via AJAX
+        // ==========================================================
+
+        // 1. Generate Content di Edit Modal
+        $(document).on('click', '.btn-kreasikan-edit', function() {
+            var btn = $(this);
+            var form = btn.closest('form');
+            var judul = form.find('input[name="judul"]').val();
+            var targetIsi = form.find('textarea[name="isi"]');
+
+            if (judul == '') {
+                alert('Judul tidak boleh kosong!');
+                return;
+            }
+
+            var originalText = btn.html();
+            btn.prop('disabled', true).html('<span class="spinner-border spinner-border-sm"></span> Menulis...');
+
+            $.ajax({
+                url: 'ai_helper.php',
+                type: 'POST',
+                contentType: 'application/json',
+                data: JSON.stringify({ text: judul, mode: 'generate_content' }),
+                success: function(response) {
+                    if (response.result) {
+                        targetIsi.val(response.result);
+                    } else if (response.error) {
+                        alert('AI Error: ' + response.error);
+                    }
+                    btn.prop('disabled', false).html(originalText);
+                },
+                error: function(xhr, status, error) {
+                    alert('Gagal menghubungi AI Helper.');
+                    btn.prop('disabled', false).html(originalText);
+                }
+            });
+        });
+
+        // 2. Generate Summary di Edit Modal
+        $(document).on('click', '.btn-ringkas-edit', function() {
+            var btn = $(this);
+            var form = btn.closest('form');
+            var isi = form.find('textarea[name="isi"]').val();
+            var targetSummary = form.find('textarea[name="summary"]');
+
+            if (isi == '') {
+                alert('Isi artikel masih kosong!');
+                return;
+            }
+
+            var originalText = btn.html();
+            btn.prop('disabled', true).html('<span class="spinner-border spinner-border-sm"></span> Meringkas...');
+
+            $.ajax({
+                url: 'ai_helper.php',
+                type: 'POST',
+                contentType: 'application/json',
+                data: JSON.stringify({ text: isi, mode: 'summary' }),
+                success: function(response) {
+                    if (response.result) {
+                        targetSummary.val(response.result);
+                    } else if (response.error) {
+                        alert('AI Error: ' + response.error);
+                    }
+                    btn.prop('disabled', false).html(originalText);
+                },
+                error: function(xhr, status, error) {
                     alert('Gagal menghubungi AI Helper.');
                     btn.prop('disabled', false).html(originalText);
                 }
