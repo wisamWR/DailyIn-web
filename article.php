@@ -9,45 +9,57 @@
 
         <!-- Awal Modal Tambah-->
         <div class="modal fade" id="modalTambah" data-bs-backdrop="static" data-bs-keyboard="false" tabindex="-1" aria-labelledby="staticBackdropLabel" aria-hidden="true">
-            <div class="modal-dialog">
+            <div class="modal-dialog modal-lg">
                 <div class="modal-content">
                     <div class="modal-header">
                         <h1 class="modal-title fs-5" id="staticBackdropLabel">Tambah Article</h1>
                         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                     </div>
                     <form method="post" action="" enctype="multipart/form-data">
-                        <div class="modal-body">
-                            <div class="mb-3">
-                                <label for="formGroupExampleInput" class="form-label">Judul</label>
-                                <input type="text" class="form-control" name="judul" id="judulArtikel" placeholder="Tuliskan Judul Artikel" required>
-                            </div>
-                            <!-- Tombol Generate Content -->
-                            <div class="mb-3">
-                                <button type="button" class="btn btn-info btn-sm" id="btnGenContent">
-                                    <i class="bi bi-robot"></i> Buatkan Isi Artikel (AI)
-                                </button>
-                            </div>
-                            <div class="mb-3">
-                                <label for="floatingTextarea2">Isi</label>
-                                <textarea class="form-control" placeholder="Tuliskan Isi Artikel" name="isi" id="isiArtikel" required></textarea>
-                            </div>
-                            <div class="mb-3">
-                                <button type="button" class="btn btn-warning btn-sm" id="btnGenSummary">
-                                    <i class="bi bi-magic"></i> Buatkan Caption (AI) ✨
-                                </button>
-                            </div>
-                            <div class="mb-3">
-                                <label for="summaryResult">Caption (AI)</label>
-                                <textarea class="form-control" placeholder="Caption artikel..." name="summary" id="summaryResult"></textarea>
-                            </div>
-                            <div class="mb-3">
-                                <label for="formGroupExampleInput2" class="form-label">Gambar</label>
-                                <input type="file" class="form-control" name="gambar">
+                        <div class="modal-body p-4">
+                            <div class="row">
+                                <!-- Kolom Kiri: Judul & Isi Artikel (85% Width equivalent if needed, but keeping col-md-8 for now) -->
+                                <div class="col-md-8">
+                                    <!-- Judul Section -->
+                                    <div class="mb-4">
+                                        <label for="formGroupExampleInput" class="form-label small text-muted">JUDUL ARTIKEL</label>
+                                        <input type="text" class="form-control form-control-lg fw-bold" name="judul" id="judulArtikel" placeholder="Tulis Judul Artikel yang Menarik" required>
+                                    </div>
+
+                                    <!-- Isi Artikel Section -->
+                                    <div class="mb-4">
+                                        <div class="d-flex justify-content-between align-items-center mb-2">
+                                            <label for="floatingTextarea2" class="form-label small text-muted mb-0">ISI ARTIKEL</label>
+                                            <button type="button" class="btn btn-outline-info btn-sm" id="btnGenContent">
+                                                <i class="bi bi-robot"></i> ✨ Bantu Tulis (AI)
+                                            </button>
+                                        </div>
+                                        <textarea class="form-control" placeholder="Mulai menulis artikel anda di sini..." name="isi" id="isiArtikel" rows="15" required></textarea>
+                                    </div>
+                                </div>
+
+                                <!-- Kolom Kanan: Sidebar (Caption & Gambar) -->
+                                <div class="col-md-4 border-start">
+                                    <div class="mb-4">
+                                        <div class="d-flex justify-content-between align-items-center mb-2">
+                                            <label for="summaryResult" class="form-label small text-muted mb-0">CAPTION SOSMED</label>
+                                            <button type="button" class="btn btn-outline-warning btn-sm" id="btnGenSummary">
+                                                <i class="bi bi-stars"></i> ✨ Buat Caption
+                                            </button>
+                                        </div>
+                                        <textarea class="form-control bg-light" placeholder="Caption otomatis..." name="summary" id="summaryResult" rows="6"></textarea>
+                                    </div>
+
+                                    <div class="mb-4">
+                                        <label for="formGroupExampleInput2" class="form-label small text-muted">GAMBAR SAMPUL</label>
+                                        <input type="file" class="form-control" name="gambar">
+                                    </div>
+                                </div>
                             </div>
                         </div>
                         <div class="modal-footer">
-                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
-                            <input type="submit" value="simpan" name="simpan" class="btn btn-primary">
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Batal</button>
+                            <input type="submit" value="Simpan Artikel" name="simpan" class="btn btn-primary">
                         </div>
                     </form>
                 </div>
@@ -77,6 +89,21 @@
     $(document).ready(function() {
         load_data();
 
+        // Initialize Summernote
+        $('#isiArtikel').summernote({
+            tabsize: 2,
+            height: 300,
+            toolbar: [
+                ['style', ['style']],
+                ['font', ['bold', 'underline', 'clear']],
+                ['color', ['color']],
+                ['para', ['ul', 'ol', 'paragraph']],
+                ['table', ['table']],
+                ['insert', ['link', 'picture', 'video']],
+                ['view', ['fullscreen', 'codeview', 'help']]
+            ]
+        });
+
         function load_data(hlm) {
             $.ajax({
                 url: "article_data.php",
@@ -96,8 +123,12 @@
 
         // Logika AI Summary
         $('#btnGenSummary').click(function() {
-            var isi = $('#isiArtikel').val();
-            if (isi == '') {
+            // Get content from Summernote
+            var isi = $('#isiArtikel').summernote('code');
+            // Strip HTML tags for summary generation to save tokens/cleaner input
+            var textOnly = $("<div/>").html(isi).text();
+
+            if (textOnly.trim() == '') {
                 alert('Harap isi artikel terlebih dahulu!');
                 return;
             }
@@ -110,7 +141,7 @@
                 url: 'ai_helper.php',
                 type: 'POST',
                 contentType: 'application/json',
-                data: JSON.stringify({ text: isi, mode: 'generate_caption' }),
+                data: JSON.stringify({ text: textOnly, mode: 'generate_caption' }),
                 success: function(response) {
                     if (response.result) {
                         $('#summaryResult').val(response.result);
@@ -146,7 +177,8 @@
                 data: JSON.stringify({ text: judul, mode: 'generate_content' }),
                 success: function(response) {
                     if (response.result) {
-                        $('#isiArtikel').val(response.result);
+                        // Set content to Summernote
+                        $('#isiArtikel').summernote('code', response.result);
                     } else if (response.error) {
                         alert('AI Error: ' + response.error);
                     }
@@ -162,6 +194,11 @@
 
 
         // 1. Generate Content di Edit Modal
+        // Note: Logic for Edit Modal might need similar Summernote updates if the edit modal uses a different ID or class for the textarea.
+        // Assuming 'textarea[name="isi"]' refers to the same element or a new one in a different modal. 
+        // If it's a dynamic modal (edit), standard summernote init might need to happen on modal show.
+        // For simplicity in this task, I will leave existing edit logic but warn that it needs Summernote support if it uses rich text too.
+        
         $(document).on('click', '.btn-kreasikan-edit', function() {
             var btn = $(this);
             var form = btn.closest('form');
@@ -183,7 +220,12 @@
                 data: JSON.stringify({ text: judul, mode: 'generate_content' }),
                 success: function(response) {
                     if (response.result) {
-                        targetIsi.val(response.result);
+                         // Check if this textarea has summernote initialized
+                         if (targetIsi.next('.note-editor').length > 0) {
+                             targetIsi.summernote('code', response.result);
+                         } else {
+                             targetIsi.val(response.result);
+                         }
                     } else if (response.error) {
                         alert('AI Error: ' + response.error);
                     }
@@ -200,8 +242,17 @@
         $(document).on('click', '.btn-ringkas-edit', function() {
             var btn = $(this);
             var form = btn.closest('form');
-            var isi = form.find('textarea[name="isi"]').val();
+            var targetIsi = form.find('textarea[name="isi"]');
             var targetSummary = form.find('textarea[name="summary"]');
+            
+            // Get content safely
+            var isi = '';
+            if (targetIsi.next('.note-editor').length > 0) {
+                 isi = targetIsi.summernote('code');
+                 isi = $("<div/>").html(isi).text(); // Strip tags
+            } else {
+                 isi = targetIsi.val();
+            }
 
             if (isi == '') {
                 alert('Isi artikel masih kosong!');

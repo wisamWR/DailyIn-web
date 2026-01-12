@@ -84,58 +84,72 @@ $hasil = $conn->query($sql);
 
                     <!-- Awal Modal Edit -->
                     <div class="modal fade" id="modalEdit<?= $row["id"] ?>" data-bs-backdrop="static" data-bs-keyboard="false" tabindex="-1" aria-labelledby="staticBackdropLabel" aria-hidden="true">
-                        <div class="modal-dialog">
+                        <div class="modal-dialog modal-lg">
                             <div class="modal-content">
                                 <div class="modal-header">
                                     <h1 class="modal-title fs-5" id="staticBackdropLabel">Edit Article</h1>
                                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                                 </div>
                                 <form method="post" action="" enctype="multipart/form-data">
-                                    <div class="modal-body">
-                                        <div class="mb-3">
-                                            <label for="formGroupExampleInput" class="form-label">Judul</label>
-                                            <input type="hidden" name="id" value="<?= $row["id"] ?>">
-                                            <input type="text" class="form-control" name="judul" placeholder="Tuliskan Judul Artikel" value="<?= $row["judul"] ?>" required>
+                                    <div class="modal-body p-4">
+                                        <input type="hidden" name="id" value="<?= $row["id"] ?>">
+                                        
+                                        <!-- Judul Full Width -->
+                                        <div class="mb-4">
+                                            <label for="formGroupExampleInput" class="form-label small text-muted">JUDUL ARTIKEL</label>
+                                            <input type="text" class="form-control form-control-lg fw-bold" name="judul" placeholder="Tulis Judul Artikel yang Menarik" value="<?= $row["judul"] ?>" required>
                                         </div>
-                                        <div class="mb-3">
-                                            <button type="button" class="btn btn-info btn-sm btn-kreasikan-edit">
-                                                <i class="bi bi-robot"></i> Buatkan Isi (AI)
-                                            </button>
-                                        </div>
-                                        <div class="mb-3">
-                                            <label for="floatingTextarea2">Isi</label>
-                                            <textarea class="form-control" placeholder="Tuliskan Isi Artikel" name="isi" required><?= $row["isi"] ?></textarea>
-                                        </div>
-                                        <div class="mb-3">
-                                            <button type="button" class="btn btn-warning btn-sm btn-ringkas-edit">
-                                                <i class="bi bi-magic"></i> Buatkan Ringkasan (AI)
-                                            </button>
-                                        </div>
-                                        <div class="mb-3">
-                                            <label>Ringkasan (AI)</label>
-                                            <textarea class="form-control" name="summary"><?= $row["summary"] ?></textarea>
-                                        </div>
-                                        <div class="mb-3">
-                                            <label for="formGroupExampleInput2" class="form-label">Ganti Gambar</label>
-                                            <input type="file" class="form-control" name="gambar">
-                                        </div>
-                                        <div class="mb-3">
-                                            <label for="formGroupExampleInput3" class="form-label">Gambar Lama</label>
-                                            <?php
-                                            if ($row["gambar"] != '') {
-                                                if (file_exists('img/' . $row["gambar"] . '')) {
-                                            ?>
-                                                    <br><img src="img/<?= $row["gambar"] ?>" width="100">
-                                            <?php
-                                                }
-                                            }
-                                            ?>
-                                            <input type="hidden" name="gambar_lama" value="<?= $row["gambar"] ?>">
+
+                                        <div class="row">
+                                            <!-- Kolom Kiri: Isi Artikel (Lebih Lebar) -->
+                                            <div class="col-md-8">
+                                                <div class="mb-4">
+                                                    <div class="d-flex justify-content-between align-items-center mb-2">
+                                                        <label for="floatingTextarea2" class="form-label small text-muted mb-0">ISI ARTIKEL</label>
+                                                        <button type="button" class="btn btn-outline-info btn-sm btn-kreasikan-edit">
+                                                            <i class="bi bi-robot"></i> ✨ Bantu Tulis (AI)
+                                                        </button>
+                                                    </div>
+                                                    <!-- Add class 'summernote' for initialization -->
+                                                    <textarea class="form-control summernote" placeholder="Mulai menulis artikel anda di sini..." name="isi" rows="15" required><?= $row["isi"] ?></textarea>
+                                                </div>
+                                            </div>
+
+                                            <!-- Kolom Kanan: Sidebar (Caption & Gambar) -->
+                                            <div class="col-md-4 border-start">
+                                                <div class="mb-4">
+                                                    <div class="d-flex justify-content-between align-items-center mb-2">
+                                                        <label for="summaryResult" class="form-label small text-muted mb-0">CAPTION SOSMED</label>
+                                                        <button type="button" class="btn btn-outline-warning btn-sm btn-ringkas-edit">
+                                                            <i class="bi bi-stars"></i> ✨ Buat Caption
+                                                        </button>
+                                                    </div>
+                                                    <textarea class="form-control bg-light" placeholder="Caption otomatis..." name="summary" rows="6"><?= $row["summary"] ?></textarea>
+                                                </div>
+
+                                                <div class="mb-4">
+                                                    <label for="formGroupExampleInput2" class="form-label small text-muted">GANTI GAMBAR</label>
+                                                    <input type="file" class="form-control" name="gambar">
+                                                </div>
+                                                <div class="mb-4">
+                                                    <label for="formGroupExampleInput3" class="form-label small text-muted">GAMBAR SAAT INI</label>
+                                                    <?php
+                                                    if ($row["gambar"] != '') {
+                                                        if (file_exists('img/' . $row["gambar"] . '')) {
+                                                    ?>
+                                                            <br><img src="img/<?= $row["gambar"] ?>" width="100" class="img-thumbnail mt-2">
+                                                    <?php
+                                                        }
+                                                    }
+                                                    ?>
+                                                    <input type="hidden" name="gambar_lama" value="<?= $row["gambar"] ?>">
+                                                </div>
+                                            </div>
                                         </div>
                                     </div>
                                     <div class="modal-footer">
-                                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
-                                        <input type="submit" value="simpan" name="simpan" class="btn btn-primary">
+                                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Batal</button>
+                                        <input type="submit" value="Simpan Perubahan" name="simpan" class="btn btn-primary">
                                     </div>
                                 </form>
                             </div>
