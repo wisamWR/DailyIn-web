@@ -9,13 +9,13 @@
 
         <!-- Awal Modal Tambah-->
         <div class="modal fade" id="modalTambah" data-bs-backdrop="static" data-bs-keyboard="false" tabindex="-1" aria-labelledby="staticBackdropLabel" aria-hidden="true">
-            <div class="modal-dialog modal-lg">
-                <div class="modal-content">
-                    <div class="modal-header">
-                        <h1 class="modal-title fs-5" id="staticBackdropLabel">Tambah Article</h1>
-                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-                    </div>
-                    <form method="post" action="" enctype="multipart/form-data">
+            <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+                <form method="post" action="" enctype="multipart/form-data" style="display:contents">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h1 class="modal-title fs-5" id="staticBackdropLabel">Tambah Article</h1>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                        </div>
                         <div class="modal-body p-4">
                             <div class="row">
                                 <!-- Kolom Kiri: Judul & Isi Artikel (85% Width equivalent if needed, but keeping col-md-8 for now) -->
@@ -61,8 +61,8 @@
                             <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Batal</button>
                             <input type="submit" value="Simpan Artikel" name="simpan" class="btn btn-primary">
                         </div>
-                    </form>
-                </div>
+                    </div>
+                </form>
             </div>
         </div>
         <!-- Akhir Modal Tambah-->

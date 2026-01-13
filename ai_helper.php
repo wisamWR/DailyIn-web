@@ -152,10 +152,10 @@ Buatkan ringkasan dalam format bullet points:";
 
         $result = json_decode($response, true);
 
-            // Jika berhasil dapat teks
+        // Jika berhasil dapat teks
         if (isset($result['candidates'][0]['content']['parts'][0]['text'])) {
             $generatedText = $result['candidates'][0]['content']['parts'][0]['text'];
-            
+
             // Tambahkan validasi panjang caption
             if ($mode === 'generate_caption') {
                 $words = str_word_count($generatedText);
@@ -170,21 +170,21 @@ Buatkan ringkasan dalam format bullet points:";
             if ($mode === 'generate_content') {
                 // Remove markdown code blocks jika ada
                 $generatedText = preg_replace('/```html|```/i', '', $generatedText);
-                
+
                 // Pastikan minimal ada 2 <h2> dan 3 <p>
                 $h2_count = substr_count($generatedText, '<h2>');
                 $p_count = substr_count($generatedText, '<p>');
-                
+
                 if ($h2_count < 2 || $p_count < 3) {
-                     // Jika gagal validasi, jangan kirim hasil, tapi coba model lain?
-                     // Untuk saat ini, kita anggap ini kegagalan model ini, dan continue ke model berikutnya?
-                     // Atau return error langsung jika ini adalah iterasi terakhir?
-                     // Sesuai instruksi user "return error", tapi ini dalam loop models.
-                     // Kita set error dan continue
-                     $final_result = ['error' => 'Artikel yang dihasilkan tidak memenuhi standar struktur.'];
-                     continue; 
+                    // Jika gagal validasi, jangan kirim hasil, tapi coba model lain?
+                    // Untuk saat ini, kita anggap ini kegagalan model ini, dan continue ke model berikutnya?
+                    // Atau return error langsung jika ini adalah iterasi terakhir?
+                    // Sesuai instruksi user "return error", tapi ini dalam loop models.
+                    // Kita set error dan continue
+                    $final_result = ['error' => 'Artikel yang dihasilkan tidak memenuhi standar struktur.'];
+                    continue;
                 }
-                
+
                 // Clean up
                 $generatedText = trim($generatedText);
             }
@@ -195,8 +195,22 @@ Buatkan ringkasan dalam format bullet points:";
         }
 
         // Simpan error terakhir untuk debugging
+        // Simpan error terakhir untuk debugging
         if (isset($result['error'])) {
-            $final_result = ['error' => 'Google API Error (' . $model_name . '): ' . ($result['error']['message'] ?? 'Unknown'), 'raw_response' => $result];
+            $errorMsg = $result['error']['message'] ?? '';
+            $status = $result['error']['status'] ?? '';
+
+            // Deteksi Limit / Quota Exceeded
+            if ($http_code == 429 || $status == 'RESOURCE_EXHAUSTED' || stripos($errorMsg, 'quota') !== false) {
+                $final_result = ['error' => "Maaf, kuota AI harian Anda telah habis. Silakan coba lagi besok."];
+                // Jika kena limit, biasanya semua model di project yang sama akan kena. 
+                // Tapi kita biarkan loop lanjut siapa tahu ada keajaiban, tapi error final tetap yang friendly.
+            } else {
+                // Hanya update error jika belum ada error prioritas (seperti quota habis)
+                if (!isset($final_result['error']) || strpos($final_result['error'], 'Maaf, kuota') === false) {
+                    $final_result = ['error' => 'Google API Error (' . $model_name . '): ' . $errorMsg];
+                }
+            }
         }
     }
 
