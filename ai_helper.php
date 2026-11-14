@@ -5,7 +5,6 @@ error_reporting(0);
 ini_set('display_errors', 0);
 
 require_once 'auth.php';
-require_once 'env.php';
 
 // ==================================================================
 // KONFIGURASI AI
@@ -150,16 +149,10 @@ $mode = $data['mode'] ?? '';
 // dan hasilnya disimpan supaya tidak memanggil AI berulang-ulang.
 // ==================================================================
 if ($mode === 'generate_summary') {
-    require_once 'koneksi.php';
-
     $id = (int) ($data['id'] ?? 0);
-    $cache = has_ai_summary_column($conn);
+    $cache = has_ai_summary_column();
 
-    $stmt = $conn->prepare("SELECT judul, isi" . ($cache ? ", ai_summary" : "") . " FROM article WHERE id = ?");
-    $stmt->bind_param("i", $id);
-    $stmt->execute();
-    $article = $stmt->get_result()->fetch_assoc();
-    $stmt->close();
+    $article = db_one("SELECT judul, isi" . ($cache ? ", ai_summary" : "") . " FROM article WHERE id = ?", [$id]);
 
     if (!$article) {
         json_out(['error' => 'Artikel tidak ditemukan'], 404);
@@ -196,10 +189,7 @@ Buatkan ringkasan dalam format bullet points:";
     $hasil = ask_gemini($prompt, $mode, $apiKey, $models_to_try);
 
     if (isset($hasil['result']) && $cache) {
-        $stmt = $conn->prepare("UPDATE article SET ai_summary = ? WHERE id = ?");
-        $stmt->bind_param("si", $hasil['result'], $id);
-        $stmt->execute();
-        $stmt->close();
+        db_run("UPDATE article SET ai_summary = ? WHERE id = ?", [$hasil['result'], $id]);
     }
     if (isset($hasil['error']) && strpos($hasil['error'], 'Maaf, kuota') === false) {
         // detail error Google hanya untuk admin, pengunjung cukup pesan umum

@@ -1,0 +1,23 @@
+# Konfigurasi web server untuk Docker/Vercel (pengganti .htaccess)
+:{$PORT:80} {
+	root * /app/public
+	encode zstd gzip
+
+	header {
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "SAMEORIGIN"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		-Server
+	}
+
+	# Blokir file rahasia/internal: dotfile (.env, .git), dump SQL, dokumentasi,
+	# file helper yang hanya untuk di-include, dan script di folder upload
+	@blocked path_regexp ^/(\.|migrations/|database/|docker/|img/.*\.php|.*\.(sql|md)$|(auth|env|koneksi|storage|upload_foto|dashboard|article|gallery|password|config_ai)\.php$)
+	handle @blocked {
+		respond 404
+	}
+
+	handle {
+		php_server
+	}
+}

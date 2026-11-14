@@ -53,11 +53,12 @@ function upload_foto($File)
     } else {
         //Create new filename (tanggal + angka acak supaya 2 upload di detik yang sama tidak bentrok):
         $NewName = date("YmdHis") . '_' . bin2hex(random_bytes(4)) . '.' . $AllowedTypes[$info[2]];
-        $UploadDestination = __DIR__ . "/img/" . $NewName;
+        //simpan ke folder img/ (lokal) atau Vercel Blob (lihat storage.php)
+        $stored = store_image($TmpLocation, $NewName, $info['mime']);
 
-        if (move_uploaded_file($TmpLocation, $UploadDestination)) {
-            //echo "The file has been uploaded.";
-            $message .= $NewName;
+        if ($stored !== false) {
+            //message berisi nilai untuk kolom gambar (nama file atau URL Blob)
+            $message .= $stored;
             $hasil['status'] = true;
         } else {
             $message .= "Sorry, there was an error uploading your file. ";

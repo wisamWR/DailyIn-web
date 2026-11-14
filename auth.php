@@ -1,11 +1,67 @@
 <?php
 // Helper keamanan: session, cek login, CSRF token, escape output, sanitasi HTML
 
+require_once __DIR__ . '/koneksi.php';
+require_once __DIR__ . '/storage.php';
+
+// Session disimpan di database (SESSION_DRIVER=database). Wajib di Vercel karena
+// tiap instance server punya folder sendiri, jadi session berbasis file akan hilang.
+class DbSessionHandler implements SessionHandlerInterface
+{
+    public function open($path, $name): bool
+    {
+        return true;
+    }
+
+    public function close(): bool
+    {
+        return true;
+    }
+
+    public function read($id): string|false
+    {
+        $lifetime = (int) ini_get('session.gc_maxlifetime');
+        $data = db_value("SELECT data FROM sessions WHERE id = ? AND updated_at > ?", [$id, time() - $lifetime]);
+        return $data === false ? '' : (string) base64_decode($data);
+    }
+
+    public function write($id, $data): bool
+    {
+        $sql = DB_DRIVER === 'pgsql'
+            ? "INSERT INTO sessions (id, data, updated_at) VALUES (?, ?, ?)
+               ON CONFLICT (id) DO UPDATE SET data = EXCLUDED.data, updated_at = EXCLUDED.updated_at"
+            : "INSERT INTO sessions (id, data, updated_at) VALUES (?, ?, ?)
+               ON DUPLICATE KEY UPDATE data = VALUES(data), updated_at = VALUES(updated_at)";
+        return db_run($sql, [$id, base64_encode($data), time()]);
+    }
+
+    public function destroy($id): bool
+    {
+        return db_run("DELETE FROM sessions WHERE id = ?", [$id]);
+    }
+
+    public function gc($max_lifetime): int|false
+    {
+        $stmt = db_query("DELETE FROM sessions WHERE updated_at < ?", [time() - $max_lifetime]);
+        return $stmt->rowCount();
+    }
+}
+
+// HTTPS langsung, atau di belakang proxy (Vercel meneruskan request lewat HTTP biasa)
+function is_https()
+{
+    return (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off')
+        || ($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '') === 'https';
+}
+
 if (session_status() === PHP_SESSION_NONE) {
+    if (env('SESSION_DRIVER') === 'database') {
+        session_set_save_handler(new DbSessionHandler(), true);
+    }
     session_set_cookie_params([
         'lifetime' => 0,
         'path'     => '/',
-        'secure'   => !empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off',
+        'secure'   => is_https(),
         'httponly' => true,
         'samesite' => 'Lax',
     ]);
@@ -75,27 +131,19 @@ function alert_redirect($message, $location)
     </script>";
 }
 
-// Hanya izinkan nama file gambar hasil upload (tanpa folder / "../")
-function safe_image_name($name)
+// Hapus file gambar hanya jika valid (file lokal di img/ atau URL Vercel Blob)
+// dan tidak dipakai lagi oleh artikel/gallery lain
+function delete_image($gambar)
 {
-    $name = basename((string) $name);
-    return preg_match('/^[A-Za-z0-9_\-]+\.(jpg|jpeg|png|gif|webp)$/i', $name) ? $name : '';
-}
+    if ($gambar === null || $gambar === '' || image_url($gambar) === '') return;
 
-// Hapus file gambar hanya jika namanya valid dan tidak dipakai lagi oleh artikel/gallery lain
-function delete_image($conn, $name)
-{
-    $name = safe_image_name($name);
-    if ($name === '' || !is_file(__DIR__ . '/img/' . $name)) return;
-
-    $stmt = $conn->prepare("SELECT (SELECT COUNT(*) FROM article WHERE gambar = ?) + (SELECT COUNT(*) FROM gallery WHERE gambar = ?) AS total");
-    $stmt->bind_param("ss", $name, $name);
-    $stmt->execute();
-    $total = (int) $stmt->get_result()->fetch_assoc()['total'];
-    $stmt->close();
+    $total = (int) db_value(
+        "SELECT (SELECT COUNT(*) FROM article WHERE gambar = ?) + (SELECT COUNT(*) FROM gallery WHERE gambar = ?)",
+        [$gambar, $gambar]
+    );
 
     if ($total === 0) {
-        unlink(__DIR__ . '/img/' . $name);
+        remove_image($gambar);
     }
 }
 

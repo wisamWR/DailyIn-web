@@ -330,12 +330,7 @@ if (isset($_POST['simpan'])) {
         $id = (int) $_POST['id'];
 
         //nama gambar lama diambil dari database, bukan dari form (supaya tidak bisa dimanipulasi)
-        $stmt = $conn->prepare("SELECT gambar FROM article WHERE id = ?");
-        $stmt->bind_param("i", $id);
-        $stmt->execute();
-        $lama = $stmt->get_result()->fetch_assoc();
-        $stmt->close();
-        $gambar_lama = $lama['gambar'] ?? '';
+        $gambar_lama = (string) db_value("SELECT gambar FROM article WHERE id = ?", [$id]);
 
         if ($nama_gambar == '') {
             //jika tidak ganti gambar
@@ -343,9 +338,9 @@ if (isset($_POST['simpan'])) {
         }
 
         //ringkasan AI lama sudah tidak sesuai jika artikel diubah
-        $reset_ai = has_ai_summary_column($conn) ? ", ai_summary = NULL" : "";
+        $reset_ai = has_ai_summary_column() ? ", ai_summary = NULL" : "";
 
-        $stmt = $conn->prepare("UPDATE article
+        $simpan = db_run("UPDATE article
                                 SET
                                 judul =?,
                                 isi =?,
@@ -354,22 +349,16 @@ if (isset($_POST['simpan'])) {
                                 tanggal = ?,
                                 username = ?
                                 $reset_ai
-                                WHERE id = ?");
-
-        $stmt->bind_param("ssssssi", $judul, $isi, $summary, $gambar, $tanggal, $username, $id);
-        $simpan = $stmt->execute();
+                                WHERE id = ?", [$judul, $isi, $summary, $gambar, $tanggal, $username, $id]);
 
         //jika ganti gambar dan update berhasil, hapus gambar lama
         if ($simpan && $nama_gambar != '' && $gambar_lama != $gambar) {
-            delete_image($conn, $gambar_lama);
+            delete_image($gambar_lama);
         }
     } else {
         //jika tidak ada id, lakukan insert data baru
-        $stmt = $conn->prepare("INSERT INTO article (judul,isi,summary,gambar,tanggal,username)
-                                VALUES (?,?,?,?,?,?)");
-
-        $stmt->bind_param("ssssss", $judul, $isi, $summary, $gambar, $tanggal, $username);
-        $simpan = $stmt->execute();
+        $simpan = db_run("INSERT INTO article (judul,isi,summary,gambar,tanggal,username)
+                                VALUES (?,?,?,?,?,?)", [$judul, $isi, $summary, $gambar, $tanggal, $username]);
     }
 
     if ($simpan) {
@@ -377,9 +366,6 @@ if (isset($_POST['simpan'])) {
     } else {
         alert_redirect('Simpan data gagal', 'admin.php?page=article');
     }
-
-    $stmt->close();
-    $conn->close();
 }
 
 //jika tombol hapus diklik
@@ -389,20 +375,13 @@ if (isset($_POST['hapus'])) {
     $id = (int) $_POST['id'];
 
     //ambil nama gambar dari database, bukan dari form
-    $stmt = $conn->prepare("SELECT gambar FROM article WHERE id = ?");
-    $stmt->bind_param("i", $id);
-    $stmt->execute();
-    $row = $stmt->get_result()->fetch_assoc();
-    $stmt->close();
+    $row = db_one("SELECT gambar FROM article WHERE id = ?", [$id]);
 
-    $stmt = $conn->prepare("DELETE FROM article WHERE id =?");
-
-    $stmt->bind_param("i", $id);
-    $hapus = $stmt->execute();
+    $hapus = db_run("DELETE FROM article WHERE id = ?", [$id]);
 
     if ($hapus && $row) {
         //hapus file gambar
-        delete_image($conn, $row['gambar']);
+        delete_image($row['gambar']);
     }
 
     if ($hapus) {
@@ -410,8 +389,5 @@ if (isset($_POST['hapus'])) {
     } else {
         alert_redirect('Hapus data gagal', 'admin.php?page=article');
     }
-
-    $stmt->close();
-    $conn->close();
 }
 ?>

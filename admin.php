@@ -4,8 +4,6 @@ require_once "auth.php";
 //check jika belum ada user yang login arahkan ke halaman login (dan hentikan script)
 require_login();
 
-include "koneksi.php";
-
 // penanda bahwa halaman di-include lewat admin.php (bukan diakses langsung)
 define('DAILYIN_ADMIN', true);
 

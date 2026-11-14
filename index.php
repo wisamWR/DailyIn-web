@@ -1,6 +1,5 @@
 <?php
 require_once 'auth.php';
-include 'koneksi.php';
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -122,14 +121,13 @@ include 'koneksi.php';
 
       <div class="row row-cols-1 row-cols-md-3 g-4 justify-content-center">
         <?php
-        $sql = "SELECT * FROM article ORDER BY tanggal DESC";
-        $hasil = $conn->query($sql);
+        $hasil = db_all("SELECT * FROM article ORDER BY tanggal DESC");
 
-        while ($row = $hasil->fetch_assoc()) {
+        foreach ($hasil as $row) {
         ?>
           <div class="col">
             <div class="card h-100">
-              <img src="img/<?= e($row["gambar"]) ?>" class="card-img-top" alt="<?= e($row["judul"]) ?>" />
+              <img src="<?= e(image_url($row["gambar"])) ?>" class="card-img-top" alt="<?= e($row["judul"]) ?>" />
               <div class="card-body">
                 <h5 class="card-title"><?= e($row["judul"]) ?></h5>
                 <p class="card-text">
@@ -139,7 +137,7 @@ include 'koneksi.php';
                    data-id="<?= e($row["id"]) ?>"
                    data-judul="<?= e($row["judul"]) ?>" 
                    data-isi="<?= e(sanitize_html($row["isi"])) ?>"
-                   data-gambar="<?= e($row["gambar"]) ?>"
+                   data-gambar="<?= e(image_url($row["gambar"])) ?>"
                    data-tanggal="<?= e($row["tanggal"]) ?>">
                    Baca Selengkapnya
                 </a>
@@ -165,17 +163,16 @@ include 'koneksi.php';
       <div id="carouselExample" class="carousel slide">
         <div class="carousel-inner">
           <?php
-          $sql_gallery = "SELECT * FROM gallery ORDER BY tanggal DESC";
-          $hasil_gallery = $conn->query($sql_gallery);
+          $hasil_gallery = db_all("SELECT * FROM gallery ORDER BY tanggal DESC");
           $active = true;
-          while ($row_gallery = $hasil_gallery->fetch_assoc()) {
-            if ($row_gallery["gambar"] != '' && file_exists('img/' . $row_gallery["gambar"])) {
+          foreach ($hasil_gallery as $row_gallery) {
+            if (image_available($row_gallery["gambar"])) {
           ?>
               <div class="carousel-item <?php if ($active) {
                                           echo 'active';
                                           $active = false;
                                         } ?>">
-                <img src="img/<?= e($row_gallery["gambar"]) ?>" class="d-block w-100" alt="<?= e($row_gallery["judul"]) ?>" />
+                <img src="<?= e(image_url($row_gallery["gambar"])) ?>" class="d-block w-100" alt="<?= e($row_gallery["judul"]) ?>" />
               </div>
           <?php
             }
@@ -452,7 +449,7 @@ include 'koneksi.php';
 
         modalTitle.textContent = judul;
         modalBodyIsi.innerHTML = isi; // Gunakan innerHTML agar tag HTML di isi (jika ada) ter-render
-        modalBodyGambar.src = "img/" + gambar;
+        modalBodyGambar.src = gambar;
         modalBodyTanggal.textContent = "Diposting pada: " + tanggal;
 
         // Setup tombol Buat Ringkasan (Inline Toggle)

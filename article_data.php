@@ -4,10 +4,8 @@ require_once "auth.php";
 //endpoint ini hanya untuk admin
 require_login_json();
 
-include "koneksi.php";
-
 $limit = 3;
-$total_records = (int) $conn->query("SELECT COUNT(*) AS total FROM article")->fetch_assoc()['total'];
+$total_records = (int) db_value("SELECT COUNT(*) FROM article");
 $jumlah_page = max(1, (int) ceil($total_records / $limit));
 
 //nomor halaman harus angka 1..jumlah_page
@@ -16,8 +14,7 @@ $hlm = min(max($hlm, 1), $jumlah_page);
 $limit_start = ($hlm - 1) * $limit;
 $no = $limit_start + 1;
 
-$sql = "SELECT * FROM article ORDER BY tanggal DESC LIMIT $limit_start, $limit";
-$hasil = $conn->query($sql);
+$hasil = db_all("SELECT * FROM article ORDER BY tanggal DESC LIMIT $limit OFFSET $limit_start");
 ?>
 
 <!-- Table Article -->
@@ -33,7 +30,7 @@ $hasil = $conn->query($sql);
     </thead>
     <tbody>
         <?php
-        while ($row = $hasil->fetch_assoc()) {
+        foreach ($hasil as $row) {
         ?>
             <tr>
                 <td><?= $no++ ?></td>
@@ -79,9 +76,9 @@ $hasil = $conn->query($sql);
                 <td>
                     <?php
                     if ($row["gambar"] != '') {
-                        if (file_exists('img/' . $row["gambar"] . '')) {
+                        if (image_available($row["gambar"])) {
                     ?>
-                            <img src="img/<?= e($row["gambar"]) ?>" width="100">
+                            <img src="<?= e(image_url($row["gambar"])) ?>" width="100">
                     <?php
                         }
                     }
@@ -146,9 +143,9 @@ $hasil = $conn->query($sql);
                                                     <label for="formGroupExampleInput3" class="form-label small text-muted">GAMBAR SAAT INI</label>
                                                     <?php
                                                     if ($row["gambar"] != '') {
-                                                        if (file_exists('img/' . $row["gambar"] . '')) {
+                                                        if (image_available($row["gambar"])) {
                                                     ?>
-                                                            <br><img src="img/<?= e($row["gambar"]) ?>" width="100" class="img-thumbnail mt-2">
+                                                            <br><img src="<?= e(image_url($row["gambar"])) ?>" width="100" class="img-thumbnail mt-2">
                                                     <?php
                                                         }
                                                     }

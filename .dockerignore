@@ -1,0 +1,15 @@
+.git
+.gitignore
+.vercel
+.env
+.env.*
+config_ai.php
+*.log
+*.md
+*.sql
+migrations
+database
+.dockerignore
+.vercelignore
+.htaccess
+img/.htaccess

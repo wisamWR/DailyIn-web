@@ -1,5 +1,6 @@
 <?php
-// Membaca file .env sekali saja, lalu bisa dipakai di file mana pun lewat env()
+// Membaca konfigurasi dari file .env (lokal), atau dari environment variable server
+// (misalnya Vercel: Settings > Environment Variables). Nilai di .env didahulukan.
 function env($key, $default = '')
 {
     static $ENV = null;
@@ -20,5 +21,10 @@ function env($key, $default = '')
         }
     }
 
-    return $ENV[$key] ?? $default;
+    if (array_key_exists($key, $ENV)) {
+        return $ENV[$key];
+    }
+
+    $value = getenv($key);
+    return ($value === false || $value === '') ? $default : $value;
 }

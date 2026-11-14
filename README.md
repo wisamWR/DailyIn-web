@@ -36,7 +36,8 @@ Website ini terintegrasi langsung dengan Google Gemini API untuk membantu produk
 ---
 
 ## 💻 Teknologi yang Digunakan
-*   **Backend**: PHP 8 (Native), MySQLi.
+*   **Backend**: PHP 8 (Native), PDO (MySQL lokal / PostgreSQL di Vercel).
+*   **Hosting**: Vercel Container Runtime (FrankenPHP), Neon Postgres, Vercel Blob.
 *   **Frontend**: HTML5, CSS3, Bootstrap 5.3, jQuery.
 *   **AJAX**: Untuk interaksi AI yang mulus tanpa reload halaman.
 *   **AI Service**: Google Gemini API via cURL.
@@ -80,12 +81,41 @@ Ikuti langkah ini untuk menjalankan project di komputer lokal (XAMPP/Laragon):
 
 ---
 
+## ▲ Deploy ke Vercel
+
+Project ini di-deploy sebagai **container** (lihat `Dockerfile` + `Caddyfile`). Vercel otomatis memakai preset *Container* karena ada `Dockerfile` di root.
+
+Karena server Vercel tidak menyimpan file secara permanen dan tiap instance terpisah:
+
+| Kebutuhan | Di Vercel memakai | Environment variable |
+|---|---|---|
+| Database | **Neon Postgres** (Marketplace) | `DATABASE_URL` (otomatis dari integrasi) |
+| Upload gambar | **Vercel Blob** | `BLOB_READ_WRITE_TOKEN` (otomatis saat Blob store dihubungkan) |
+| Session login | Tabel `sessions` di database | `SESSION_DRIVER=database` |
+| AI | Google Gemini | `GEMINI_API_KEY` |
+
+Langkah:
+1.  Import repo ini di Vercel (atau `vercel deploy`).
+2.  Tambahkan **Neon** dari tab *Storage / Marketplace* dan hubungkan ke project.
+3.  Jalankan `database/postgres.sql` sekali di SQL Editor Neon (membuat tabel + data awal).
+4.  Buat **Blob store** dan hubungkan ke project.
+5.  Tambahkan env `SESSION_DRIVER=database` dan `GEMINI_API_KEY`, lalu redeploy.
+6.  Login sebagai `admin` / `123456` dan **langsung ganti password**.
+
+> `.htaccess` hanya berlaku di hosting Apache. Di Vercel, aturan blokir file sensitif ada di `Caddyfile`.
+
+---
+
 ## 📂 Struktur Folder
 ```
 DailyIn-web/
 ├── 📂 api/              # API endpoints internal
 ├── 📂 img/              # Folder upload gambar (eksekusi script diblokir)
-├── 📂 migrations/       # Script SQL untuk upgrade database lama
+├── 📂 database/         # Skema PostgreSQL (Neon / Vercel)
+├── 📂 docker/           # php.ini untuk container
+├── 📂 migrations/       # Script SQL untuk upgrade database lama (MySQL)
+├── 📄 Dockerfile        # Image FrankenPHP untuk Vercel
+├── 📄 Caddyfile         # Web server config di container (pengganti .htaccess)
 ├── 📄 .env              # File Konfigurasi Rahasia (salin dari .env.example)
 ├── 📄 .htaccess         # Blokir akses file sensitif + header keamanan
 ├── 📄 admin.php         # Dashboard Admin (Main Layout)
@@ -95,7 +125,8 @@ DailyIn-web/
 ├── 📄 auth.php          # Session, cek login, CSRF, escape & sanitasi HTML
 ├── 📄 env.php           # Pembaca file .env
 ├── 📄 index.php         # Halaman Depan (Landing Page)
-├── 📄 koneksi.php       # Koneksi Database
+├── 📄 koneksi.php       # Koneksi Database (PDO, MySQL/PostgreSQL) + helper query
+├── 📄 storage.php       # Simpan gambar (folder img/ atau Vercel Blob)
 ├── 📄 password.php      # Ganti Password admin
 └── ...
 ```

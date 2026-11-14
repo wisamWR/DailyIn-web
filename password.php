@@ -12,11 +12,7 @@ if (isset($_POST['ganti_password'])) {
     $baru = $_POST['password_baru'] ?? '';
     $ulang = $_POST['password_ulang'] ?? '';
 
-    $stmt = $conn->prepare("SELECT id, password FROM user WHERE username = ?");
-    $stmt->bind_param("s", $_SESSION['username']);
-    $stmt->execute();
-    $user = $stmt->get_result()->fetch_assoc();
-    $stmt->close();
+    $user = db_one("SELECT id, password FROM " . USER_TABLE . " WHERE username = ?", [$_SESSION['username']]);
 
     //password lama bisa masih md5 (sebelum login pertama setelah update) atau sudah bcrypt
     $cocok = $user && (password_verify($lama, $user['password'])
@@ -30,10 +26,7 @@ if (isset($_POST['ganti_password'])) {
         alert_redirect('Konfirmasi password baru tidak sama', 'admin.php?page=password');
     } else {
         $hash = password_hash($baru, PASSWORD_DEFAULT);
-        $stmt = $conn->prepare("UPDATE user SET password = ? WHERE id = ?");
-        $stmt->bind_param("si", $hash, $user['id']);
-        $simpan = $stmt->execute();
-        $stmt->close();
+        $simpan = db_run("UPDATE " . USER_TABLE . " SET password = ? WHERE id = ?", [$hash, $user['id']]);
 
         alert_redirect($simpan ? 'Password berhasil diganti' : 'Password gagal diganti', 'admin.php?page=password');
     }
