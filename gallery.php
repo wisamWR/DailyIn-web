@@ -1,3 +1,9 @@
+<?php
+if (!defined('DAILYIN_ADMIN')) {
+    http_response_code(403);
+    exit;
+}
+?>
     <!-- Button trigger modal -->
     <button type="button" class="btn btn-secondary mb-2" data-bs-toggle="modal" data-bs-target="#modalTambah">
         <i class="bi bi-plus-lg"></i> Tambah Gallery
@@ -16,6 +22,7 @@
                         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                     </div>
                     <form method="post" action="" enctype="multipart/form-data">
+                        <?= csrf_field() ?>
                         <div class="modal-body">
                             <div class="mb-3">
                                 <label for="formGroupExampleInput" class="form-label">Judul</label>
@@ -60,18 +67,21 @@
     });
 </script>
 
+
 <?php
 include "upload_foto.php";
 
 //jika tombol simpan diklik
 if (isset($_POST['simpan'])) {
-    $judul = $_POST['judul'];
+    verify_csrf();
+
+    $judul = trim($_POST['judul'] ?? '');
     $tanggal = date("Y-m-d H:i:s");
     $username = $_SESSION['username'];
     $gambar = '';
-    $nama_gambar = $_FILES['gambar']['name'];
+    $nama_gambar = $_FILES['gambar']['name'] ?? '';
 
-    //jika ada file yang dikirim  
+    //jika ada file yang dikirim
     if ($nama_gambar != '') {
         //panggil function upload_foto untuk cek spesifikasi file yg dikirimkan user
         //function ini memiliki 2 keluaran yaitu status dan message
@@ -83,39 +93,34 @@ if (isset($_POST['simpan'])) {
             $gambar = $cek_upload['message'];
         } else {
             //jika false maka message berisi pesan error, tampilkan dalam alert
-            echo "<script>
-                alert('" . $cek_upload['message'] . "');
-                document.location='admin.php?page=gallery';
-            </script>";
+            alert_redirect($cek_upload['message'], 'admin.php?page=gallery');
             die;
         }
     }
 
-    //buat query untuk insert data
-    $sql = "INSERT INTO gallery (judul, gambar, tanggal, username) VALUES ('$judul', '$gambar', '$tanggal', '$username')";
+    //prepared statement untuk insert data
+    $stmt = $conn->prepare("INSERT INTO gallery (judul, gambar, tanggal, username) VALUES (?, ?, ?, ?)");
+    $stmt->bind_param("ssss", $judul, $gambar, $tanggal, $username);
 
     //eksekusi query
-    if ($conn->query($sql) === TRUE) {
-        echo "<script>
-            alert('Data berhasil disimpan');
-            document.location='admin.php?page=gallery';
-        </script>";
+    if ($stmt->execute()) {
+        alert_redirect('Data berhasil disimpan', 'admin.php?page=gallery');
     } else {
-        echo "<script>
-            alert('Data gagal disimpan');
-            document.location='admin.php?page=gallery';
-        </script>";
+        alert_redirect('Data gagal disimpan', 'admin.php?page=gallery');
     }
+    $stmt->close();
 }
 
 //jika tombol simpan diklik untuk edit
 if (isset($_POST['edit'])) {
-    $id = $_POST['id'];
-    $judul = $_POST['judul'];
-    $gambar = '';
-    $nama_gambar = $_FILES['gambar']['name'];
+    verify_csrf();
 
-    //jika ada file yang dikirim  
+    $id = (int) $_POST['id'];
+    $judul = trim($_POST['judul'] ?? '');
+    $gambar = '';
+    $nama_gambar = $_FILES['gambar']['name'] ?? '';
+
+    //jika ada file yang dikirim
     if ($nama_gambar != '') {
         //panggil function upload_foto untuk cek spesifikasi file yg dikirimkan user
         //function ini memiliki 2 keluaran yaitu status dan message
@@ -127,59 +132,68 @@ if (isset($_POST['edit'])) {
             $gambar = $cek_upload['message'];
         } else {
             //jika false maka message berisi pesan error, tampilkan dalam alert
-            echo "<script>
-                alert('" . $cek_upload['message'] . "');
-                document.location='admin.php?page=gallery';
-            </script>";
+            alert_redirect($cek_upload['message'], 'admin.php?page=gallery');
             die;
         }
     }
 
-    //buat query untuk update data
+    //prepared statement untuk update data
     if ($nama_gambar == '') {
-        $sql = "UPDATE gallery SET judul='$judul' WHERE id='$id'";
+        $stmt = $conn->prepare("UPDATE gallery SET judul = ? WHERE id = ?");
+        $stmt->bind_param("si", $judul, $id);
+        $update = $stmt->execute();
     } else {
-        $gambar_lama = $_POST['gambar_lama'];
-        $sql = "UPDATE gallery SET judul='$judul', gambar='$gambar' WHERE id='$id'";
-        if ($gambar_lama != '') {
-            unlink("img/" . $gambar_lama);
+        //nama gambar lama diambil dari database, bukan dari form
+        $stmt = $conn->prepare("SELECT gambar FROM gallery WHERE id = ?");
+        $stmt->bind_param("i", $id);
+        $stmt->execute();
+        $lama = $stmt->get_result()->fetch_assoc();
+        $stmt->close();
+
+        $stmt = $conn->prepare("UPDATE gallery SET judul = ?, gambar = ? WHERE id = ?");
+        $stmt->bind_param("ssi", $judul, $gambar, $id);
+        $update = $stmt->execute();
+
+        if ($update && $lama) {
+            delete_image($conn, $lama['gambar']);
         }
     }
 
     //eksekusi query
-    if ($conn->query($sql) === TRUE) {
-        echo "<script>
-            alert('Data berhasil diupdate');
-            document.location='admin.php?page=gallery';
-        </script>";
+    if ($update) {
+        alert_redirect('Data berhasil diupdate', 'admin.php?page=gallery');
     } else {
-        echo "<script>
-            alert('Data gagal diupdate');
-            document.location='admin.php?page=gallery';
-        </script>";
+        alert_redirect('Data gagal diupdate', 'admin.php?page=gallery');
     }
+    $stmt->close();
 }
 
 //jika tombol hapus diklik
 if (isset($_POST['hapus'])) {
-    $id = $_POST['hapus'];
-    $gambar = $_POST['gambar'];
+    verify_csrf();
 
-    if ($gambar != '') {
-        unlink("img/" . $gambar);
+    $id = (int) $_POST['id'];
+
+    //ambil nama gambar dari database, bukan dari form
+    $stmt = $conn->prepare("SELECT gambar FROM gallery WHERE id = ?");
+    $stmt->bind_param("i", $id);
+    $stmt->execute();
+    $row = $stmt->get_result()->fetch_assoc();
+    $stmt->close();
+
+    $stmt = $conn->prepare("DELETE FROM gallery WHERE id = ?");
+    $stmt->bind_param("i", $id);
+    $hapus = $stmt->execute();
+
+    if ($hapus && $row) {
+        delete_image($conn, $row['gambar']);
     }
 
-    $sql = "DELETE FROM gallery WHERE id='$id'";
-    if ($conn->query($sql) === TRUE) {
-        echo "<script>
-            alert('Data berhasil dihapus');
-            document.location='admin.php?page=gallery';
-        </script>";
+    if ($hapus) {
+        alert_redirect('Data berhasil dihapus', 'admin.php?page=gallery');
     } else {
-        echo "<script>
-            alert('Data gagal dihapus');
-            document.location='admin.php?page=gallery';
-        </script>";
+        alert_redirect('Data gagal dihapus', 'admin.php?page=gallery');
     }
+    $stmt->close();
 }
 ?>

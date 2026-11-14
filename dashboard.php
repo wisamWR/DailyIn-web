@@ -1,4 +1,9 @@
 <?php
+if (!defined('DAILYIN_ADMIN')) {
+    http_response_code(403);
+    exit;
+}
+
 //query untuk mengambil data article
 $sql1 = "SELECT * FROM article ORDER BY tanggal DESC";
 $hasil1 = $conn->query($sql1);

@@ -1,0 +1,26 @@
+# Jangan tampilkan daftar isi folder
+Options -Indexes
+
+# Blokir file rahasia / internal: .env, .git, dump SQL, log, file config & helper yang tidak boleh dibuka langsung
+<FilesMatch "^(\.env.*|\.git.*|.*\.sql|.*\.log|.*\.md|config_ai\.php|env\.php|auth\.php|koneksi\.php|upload_foto\.php|dashboard\.php|article\.php|gallery\.php|password\.php)$">
+    <IfModule mod_authz_core.c>
+        Require all denied
+    </IfModule>
+    <IfModule !mod_authz_core.c>
+        Order allow,deny
+        Deny from all
+    </IfModule>
+</FilesMatch>
+
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    RewriteRule (^|/)\.git(/|$) - [F,L]
+    RewriteRule ^migrations/ - [F,L]
+</IfModule>
+
+# Header keamanan dasar
+<IfModule mod_headers.c>
+    Header always set X-Content-Type-Options "nosniff"
+    Header always set X-Frame-Options "SAMEORIGIN"
+    Header always set Referrer-Policy "strict-origin-when-cross-origin"
+</IfModule>
