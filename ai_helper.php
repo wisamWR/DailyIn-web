@@ -2,6 +2,8 @@
 header('Content-Type: application/json');
 // Disable error reporting for JSON endpoint
 error_reporting(0);
+// Panggilan AI bisa lama; beri waktu lebih dari budget AI (lihat AI_TIME_BUDGET)
+set_time_limit(60);
 ini_set('display_errors', 0);
 
 require_once 'auth.php';
@@ -17,8 +19,9 @@ if ($apiKey === '' && file_exists(__DIR__ . '/config_ai.php')) {
 }
 
 // Daftar model untuk dicoba (Fallback Strategy), bisa diganti lewat GEMINI_MODELS di .env
-// Prioritas: Model Ringan (Lite) -> Versi Latest -> Versi Stabil
-$models_to_try = array_filter(array_map('trim', explode(',', env('GEMINI_MODELS', 'gemini-2.5-flash-lite,gemini-flash-latest,gemini-2.5-flash'))));
+// Prioritas: Model Ringan (Lite, cepat) -> Versi Latest. Alias *-latest selalu menunjuk model terbaru,
+// jadi tidak 404 saat versi lama dihentikan Google
+$models_to_try = array_filter(array_map('trim', explode(',', env('GEMINI_MODELS', 'gemini-flash-lite-latest,gemini-flash-latest'))));
 
 function json_out($data, $code = 200)
 {
