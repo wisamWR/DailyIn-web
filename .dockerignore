@@ -13,3 +13,4 @@ database
 .vercelignore
 .htaccess
 img/.htaccess
+vercel.json
