@@ -30,6 +30,40 @@ function json_out($data, $code = 200)
     exit;
 }
 
+// Ubah Markdown sederhana (judul #, **tebal**, *miring*, daftar -, paragraf) menjadi HTML
+function markdown_to_html($text)
+{
+    $html = '';
+    foreach (preg_split('/\n\s*\n/', trim(str_replace("\r", '', $text))) as $block) {
+        $block = trim($block);
+        if ($block === '') continue;
+
+        $inline = function ($s) {
+            $s = htmlspecialchars($s, ENT_QUOTES, 'UTF-8');
+            $s = preg_replace('/\*\*(.+?)\*\*/s', '<strong>$1</strong>', $s);
+            return preg_replace('/(?<!\*)\*(?!\s)(.+?)(?<!\s)\*(?!\*)/s', '<em>$1</em>', $s);
+        };
+
+        if (preg_match('/^#{1,6}\s+(.+?)(?:\n(.*))?$/su', $block, $m)) {
+            // judul (tingkat berapa pun) menjadi <h2>, sisa blok menjadi paragraf
+            $html .= '<h2>' . $inline(trim($m[1], " #")) . "</h2>\n";
+            if (!empty($m[2]) && trim($m[2]) !== '') {
+                $html .= '<p>' . $inline(trim($m[2])) . "</p>\n";
+            }
+        } elseif (preg_match('/^\s*[-*•]\s+/u', $block)) {
+            $items = preg_split('/\n\s*[-*•]\s+/u', "\n" . $block);
+            $html .= "<ul>\n";
+            foreach ($items as $item) {
+                if (trim($item) !== '') $html .= '<li>' . $inline(trim(preg_replace('/^\s*[-*•]\s+/u', '', $item))) . "</li>\n";
+            }
+            $html .= "</ul>\n";
+        } else {
+            $html .= '<p>' . $inline(preg_replace('/\s*\n\s*/', ' ', $block)) . "</p>\n";
+        }
+    }
+    return $html;
+}
+
 // Kirim prompt ke Gemini, coba model satu per satu sampai berhasil
 function ask_gemini($prompt, $mode, $apiKey, $models_to_try)
 {
@@ -113,12 +147,18 @@ function ask_gemini($prompt, $mode, $apiKey, $models_to_try)
                 // Remove markdown code blocks jika ada
                 $generatedText = preg_replace('/```html|```/i', '', $generatedText);
 
-                // Pastikan minimal ada 2 <h2> dan 3 <p>
-                $h2_count = substr_count($generatedText, '<h2>');
-                $p_count = substr_count($generatedText, '<p>');
+                // Beberapa model menjawab dengan Markdown, bukan HTML: ubah dulu ke HTML
+                if (!preg_match('/<p[\s>]/i', $generatedText)) {
+                    $generatedText = markdown_to_html($generatedText);
+                }
+
+                // Pastikan minimal ada 2 <h2> dan 3 <p> (tag boleh punya atribut)
+                $h2_count = preg_match_all('/<h2[\s>]/i', $generatedText);
+                $p_count = preg_match_all('/<p[\s>]/i', $generatedText);
 
                 if ($h2_count < 2 || $p_count < 3) {
                     // Anggap model ini gagal, coba model berikutnya
+                    error_log("Gemini $model_name: struktur artikel kurang (h2=$h2_count, p=$p_count): " . mb_substr(preg_replace('/\s+/', ' ', $generatedText), 0, 200));
                     $final_result = ['error' => 'Artikel yang dihasilkan tidak memenuhi standar struktur.'];
                     continue;
                 }
