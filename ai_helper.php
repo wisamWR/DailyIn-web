@@ -36,7 +36,16 @@ function ask_gemini($prompt, $mode, $apiKey, $models_to_try)
 
     $final_result = ['error' => 'Gagal menghubungi AI.'];
 
+    // Total waktu untuk semua model harus di bawah batas durasi function di Vercel
+    $deadline = microtime(true) + (int) env('AI_TIME_BUDGET', 45);
+
     foreach ($models_to_try as $model_name) {
+        $remaining = (int) floor($deadline - microtime(true));
+        if ($remaining < 5) {
+            $final_result = ['error' => 'AI terlalu lama merespons. Coba lagi sebentar lagi.'];
+            break;
+        }
+
         $url = "https://generativelanguage.googleapis.com/v1beta/models/" . rawurlencode($model_name) . ":generateContent";
 
         // Siapkan Payload Data
@@ -56,7 +65,10 @@ function ask_gemini($prompt, $mode, $apiKey, $models_to_try)
         curl_setopt($ch, CURLOPT_POST, true);
         curl_setopt($ch, CURLOPT_HTTPHEADER, ['Content-Type: application/json', 'x-goog-api-key: ' . $apiKey]);
         curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($payload));
-        curl_setopt($ch, CURLOPT_TIMEOUT, 60);
+        curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 10);
+        curl_setopt($ch, CURLOPT_TIMEOUT, min(30, $remaining));
+        // Beberapa container tidak punya jalur IPv6 keluar, jadi pakai IPv4 supaya tidak menggantung
+        curl_setopt($ch, CURLOPT_IPRESOLVE, CURL_IPRESOLVE_V4);
 
         // Verifikasi SSL tetap aktif. Untuk XAMPP di Windows yang tidak punya CA bundle,
         // isi CURL_CA_BUNDLE di .env dengan path file cacert.pem (lihat README)
@@ -69,6 +81,7 @@ function ask_gemini($prompt, $mode, $apiKey, $models_to_try)
         $response = curl_exec($ch);
         $err = curl_error($ch);
         $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        error_log(sprintf("Gemini %s: HTTP %d in %.1fs%s", $model_name, $http_code, curl_getinfo($ch, CURLINFO_TOTAL_TIME), $err ? " ($err)" : ''));
         curl_close($ch);
 
         if ($err) {

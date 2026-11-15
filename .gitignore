@@ -3,3 +3,4 @@ config_ai.php
 *.log
 .vercel
 .env*
+!.env.example
