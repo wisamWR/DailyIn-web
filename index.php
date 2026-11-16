@@ -1,4 +1,5 @@
 <?php
+require_once 'auth.php';
 include 'koneksi.php';
 ?>
 <!DOCTYPE html>
@@ -128,24 +129,24 @@ include 'koneksi.php';
         ?>
           <div class="col">
             <div class="card h-100">
-              <img src="img/<?= $row["gambar"] ?>" class="card-img-top" alt="..." />
+              <img src="img/<?= e($row["gambar"]) ?>" class="card-img-top" alt="<?= e($row["judul"]) ?>" />
               <div class="card-body">
-                <h5 class="card-title"><?= $row["judul"] ?></h5>
+                <h5 class="card-title"><?= e($row["judul"]) ?></h5>
                 <p class="card-text">
-                  <?= $row["summary"] != '' ? $row["summary"] : 'Artikel ini belum memiliki ringkasan.' ?>
+                  <?= $row["summary"] != '' ? e($row["summary"]) : 'Artikel ini belum memiliki ringkasan.' ?>
                 </p>
                 <a href="#" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#articleModal" 
-                   data-id="<?= $row["id"] ?>"
-                   data-judul="<?= htmlspecialchars($row["judul"]) ?>" 
-                   data-isi="<?= htmlspecialchars($row["isi"]) ?>"
-                   data-gambar="<?= $row["gambar"] ?>"
-                   data-tanggal="<?= $row["tanggal"] ?>">
+                   data-id="<?= e($row["id"]) ?>"
+                   data-judul="<?= e($row["judul"]) ?>" 
+                   data-isi="<?= e(sanitize_html($row["isi"])) ?>"
+                   data-gambar="<?= e($row["gambar"]) ?>"
+                   data-tanggal="<?= e($row["tanggal"]) ?>">
                    Baca Selengkapnya
                 </a>
               </div>
               <div class="card-footer">
                 <small class="text-body-secondary">
-                  <?= $row["tanggal"] ?>
+                  <?= e($row["tanggal"]) ?>
                 </small>
               </div>
             </div>
@@ -174,7 +175,7 @@ include 'koneksi.php';
                                           echo 'active';
                                           $active = false;
                                         } ?>">
-                <img src="img/<?= $row_gallery["gambar"] ?>" class="d-block w-100" alt="<?= $row_gallery["judul"] ?>" />
+                <img src="img/<?= e($row_gallery["gambar"]) ?>" class="d-block w-100" alt="<?= e($row_gallery["judul"]) ?>" />
               </div>
           <?php
             }
@@ -481,21 +482,27 @@ include 'koneksi.php';
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify({
                                 mode: 'generate_summary',
-                                title: judul,
-                                text: modalBodyIsi.innerText // Kirim plain text dari konten yang tampil
+                                id: id // server mengambil isi artikel dari database
                             })
                         });
                         
                         const data = await response.json();
                         
                         if (data.result) {
-                            // Format bullet points HTML
-                            summaryContent = '<div class="alert alert-info"><small>⚡ Ringkasan AI:</small><br>' + 
-                                             data.result.split('\n')
-                                                .filter(line => line.trim())
-                                                .map(line => line.trim())
-                                                .join('<br>') + 
-                                             '</div>';
+                            // Format bullet points (hasil AI dimasukkan sebagai teks, bukan HTML, supaya tidak bisa menyisipkan script)
+                            const box = document.createElement('div');
+                            box.className = 'alert alert-info';
+                            const label = document.createElement('small');
+                            label.textContent = '⚡ Ringkasan AI:';
+                            box.appendChild(label);
+                            data.result.split('\n')
+                                .map(line => line.trim())
+                                .filter(line => line)
+                                .forEach(line => {
+                                    box.appendChild(document.createElement('br'));
+                                    box.appendChild(document.createTextNode(line));
+                                });
+                            summaryContent = box.outerHTML;
                         } else if (data.error) {
                             alert('AI Error: ' + data.error);
                             btnRingkasan.disabled = false;

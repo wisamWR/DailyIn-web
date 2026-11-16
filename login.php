@@ -1,54 +1,79 @@
 <?php
-//memulai session atau melanjutkan session yang sudah ada
-session_start();
+//memulai session atau melanjutkan session yang sudah ada (cookie httponly + samesite)
+require_once "auth.php";
 
 //menyertakan code dari file koneksi
 include "koneksi.php";
 
 //check jika sudah ada user yang login arahkan ke halaman admin
-if (isset($_SESSION['username'])) { 
-	header("location:admin.php"); 
+if (is_logged_in()) {
+  header("location:admin.php");
+  exit;
 }
 
 if ($_SERVER["REQUEST_METHOD"] == "POST") {
-  $username = $_POST['user'];
-  
-  //menggunakan fungsi enkripsi md5 supaya sama dengan password  yang tersimpan di database
-  $password = md5($_POST['pass']);
+  verify_csrf();
 
-	//prepared statement
-  $stmt = $conn->prepare("SELECT username 
-                          FROM user 
-                          WHERE username=? AND password=?");
+  $username = trim($_POST['user'] ?? '');
+  $password = $_POST['pass'] ?? '';
 
-	//parameter binding 
-  $stmt->bind_param("ss", $username, $password);//username string dan password string
-  
+  //prepared statement, ambil hash password user
+  $stmt = $conn->prepare("SELECT id, username, password
+                          FROM user
+                          WHERE username=?");
+
+  //parameter binding
+  $stmt->bind_param("s", $username);
+
   //database executes the statement
   $stmt->execute();
-  
-  //menampung hasil eksekusi
-  $hasil = $stmt->get_result();
-  
-  //mengambil baris dari hasil sebagai array asosiatif
-  $row = $hasil->fetch_array(MYSQLI_ASSOC);
 
-  //check apakah ada baris hasil data user yang cocok
-  if (!empty($row)) {
-    //jika ada, simpan variable username pada session
+  //mengambil baris dari hasil sebagai array asosiatif
+  $row = $stmt->get_result()->fetch_assoc();
+  $stmt->close();
+
+  $valid = false;
+  if ($row) {
+    if (password_verify($password, $row['password'])) {
+      $valid = true;
+      if (password_needs_rehash($row['password'], PASSWORD_DEFAULT)) {
+        $upgrade = true;
+      }
+    } elseif (preg_match('/^[a-f0-9]{32}$/i', $row['password']) && hash_equals(strtolower($row['password']), md5($password))) {
+      //password lama masih md5: terima sekali lalu ganti ke bcrypt
+      $valid = true;
+      $upgrade = true;
+    }
+  }
+
+  if ($valid && !empty($upgrade)) {
+    $hash = password_hash($password, PASSWORD_DEFAULT);
+    $stmt = $conn->prepare("UPDATE user SET password = ? WHERE id = ?");
+    $stmt->bind_param("si", $hash, $row['id']);
+    $stmt->execute();
+    $stmt->close();
+  }
+
+  if ($valid) {
+    //ganti session id supaya tidak bisa session fixation
+    session_regenerate_id(true);
     $_SESSION['username'] = $row['username'];
+    unset($_SESSION['csrf_token']);
 
     //mengalihkan ke halaman admin
     header("location:admin.php");
   } else {
-	  //jika tidak ada (gagal), alihkan kembali ke halaman login
-    header("location:login.php");
+    //perlambat percobaan brute force
+    sleep(1);
+
+    //jika tidak ada (gagal), alihkan kembali ke halaman login
+    header("location:login.php?error=1");
   }
 
-	//menutup koneksi database
-  $stmt->close();
+  //menutup koneksi database
   $conn->close();
-} else {
+  exit;
+}
 ?>
 
 <!DOCTYPE html>
@@ -57,7 +82,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Login | DailyIn</title>
-    <link rel="icon" href="/img/logo.png" />
+    <link rel="icon" href="img/logo.png" />
     <link
       rel="stylesheet"
       href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.13.1/font/bootstrap-icons.min.css"
@@ -70,10 +95,6 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     />
   </head>
   <body class="bg-primary-subtle">
-    <?php
-$username = "admin";
-$password = "123456";
-?>
     <div class="container mt-5 pt-5">
   <div class="row">
     <div class="col-12 col-sm-8 col-md-6 m-auto">
@@ -84,18 +105,26 @@ $password = "123456";
             <p>DailyIn Account</p>
             <hr />
           </div>
+          <?php if (isset($_GET['error'])) : ?>
+            <div class="alert alert-warning rounded-4 text-center py-2">Username atau password salah</div>
+          <?php endif; ?>
           <form action="" method="post">
+            <?= csrf_field() ?>
             <input
               type="text"
               name="user"
               class="form-control my-4 py-2 rounded-4"
               placeholder="Username"
+              autocomplete="username"
+              required
             />
             <input
               type="password"
               name="pass"
               class="form-control my-4 py-2 rounded-4"
               placeholder="Password"
+              autocomplete="current-password"
+              required
             />
             <div class="text-center my-3 d-grid">
               <button class="btn btn-primary rounded-4">Login</button>
@@ -106,79 +135,11 @@ $password = "123456";
     </div>
   </div>
 </div>
-<?php if ($_SERVER["REQUEST_METHOD"] == "POST") : ?>
-<div class="d-flex justify-content-center mt-4">
-    <div class="p-3 rounded-5 shadow border-0
-    <?php 
-        if($_POST['user'] == $username && $_POST['pass'] == $password){
-            echo 'bg-success-subtle border border-success';
-        } else {
-            echo 'bg-warning-subtle border border-warning';
-        }
-    ?>
-    "
-        style="max-width: 350px; width: 100%;">
-        
-        <div class="text-center">
-            <?php
-                echo "user : " . $_POST['user'] . "<br>";
-                echo "pass : " . $_POST['pass'] . "<br><br>";
-
-                if($_POST['user'] == $username && $_POST['pass'] == $password){
-                    echo "<b class='text-success'>Username dan Password Benar</b>";
-                } else {
-                    echo "<b class='text-primary'>Username dan Password Salah</b>";
-                }
-            ?>
-        </div>
-
-    </div>
-</div>
-<?php endif; ?>
 
     <script
       src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/js/bootstrap.bundle.min.js"
       integrity="sha384-FKyoEForCGlyvwx9Hj09JcYn3nv7wiPVlz7YYwJrWVcXK/BmnVDxM+D2scQbITxI"
       crossorigin="anonymous"
     ></script>
-    <script type="text/javascript">
-      window.setTimeout("tampilWaktu()", 1000);
-
-      function tampilWaktu() {
-        var waktu = new Date();
-        var bulan = waktu.getMonth() + 1;
-
-        setTimeout("tampilWaktu()", 1000);
-        document.getElementById("tanggal").innerHTML =
-          waktu.getDate() + "/" + bulan + "/" + waktu.getFullYear();
-        document.getElementById("jam").innerHTML =
-          waktu.getHours() +
-          ":" +
-          waktu.getMinutes() +
-          ":" +
-          waktu.getSeconds();
-      }
-    </script>
-    <script type="text/javascript">
-      const html = document.documentElement;
-      const lightIcon = document.getElementById("lightIcon");
-      const darkIcon = document.getElementById("darkIcon");
-
-      if (window.matchMedia("(prefers-color-scheme: light)").matches) {
-        html.setAttribute("data-bs-theme", "light");
-      }
-
-      lightIcon.addEventListener("click", () => {
-        html.setAttribute("data-bs-theme", "light");
-      });
-
-      darkIcon.addEventListener("click", () => {
-        html.setAttribute("data-bs-theme", "dark");
-      });
-    </script>
   </body>
 </html>
-
-<?php
-}
-?>

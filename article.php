@@ -1,3 +1,9 @@
+<?php
+if (!defined('DAILYIN_ADMIN')) {
+    http_response_code(403);
+    exit;
+}
+?>
     <!-- Button trigger modal -->
     <button type="button" class="btn btn-secondary mb-2" data-bs-toggle="modal" data-bs-target="#modalTambah">
         <i class="bi bi-plus-lg"></i> Tambah Article
@@ -11,6 +17,7 @@
         <div class="modal fade" id="modalTambah" data-bs-backdrop="static" data-bs-keyboard="false" tabindex="-1" aria-labelledby="staticBackdropLabel" aria-hidden="true">
             <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
                 <form method="post" action="" enctype="multipart/form-data" style="display:contents">
+                    <?= csrf_field() ?>
                     <div class="modal-content">
                         <div class="modal-header">
                             <h1 class="modal-title fs-5" id="staticBackdropLabel">Tambah Article</h1>
@@ -141,7 +148,7 @@
                 url: 'ai_helper.php',
                 type: 'POST',
                 contentType: 'application/json',
-                data: JSON.stringify({ text: textOnly, mode: 'generate_caption' }),
+                data: JSON.stringify({ text: textOnly, title: $('#judulArtikel').val(), mode: 'generate_caption' }),
                 success: function(response) {
                     if (response.result) {
                         $('#summaryResult').val(response.result);
@@ -266,7 +273,7 @@
                 url: 'ai_helper.php',
                 type: 'POST',
                 contentType: 'application/json',
-                data: JSON.stringify({ text: isi, mode: 'generate_caption' }),
+                data: JSON.stringify({ text: isi, title: form.find('input[name="judul"]').val(), mode: 'generate_caption' }),
                 success: function(response) {
                     if (response.result) {
                         targetSummary.val(response.result);
@@ -289,15 +296,18 @@ include "upload_foto.php";
 
 //jika tombol simpan diklik
 if (isset($_POST['simpan'])) {
-    $judul = $_POST['judul'];
-    $isi = $_POST['isi'];
-    $summary = $_POST['summary'];
+    verify_csrf();
+
+    $judul = trim($_POST['judul'] ?? '');
+    //bersihkan HTML dari Summernote / AI supaya tidak ada script berbahaya
+    $isi = sanitize_html($_POST['isi'] ?? '');
+    $summary = trim($_POST['summary'] ?? '');
     $tanggal = date("Y-m-d H:i:s");
     $username = $_SESSION['username'];
     $gambar = '';
-    $nama_gambar = $_FILES['gambar']['name'];
+    $nama_gambar = $_FILES['gambar']['name'] ?? '';
 
-    //jika ada file yang dikirim  
+    //jika ada file yang dikirim
     if ($nama_gambar != '') {
         //panggil function upload_foto untuk cek spesifikasi file yg dikirimkan user
         //function ini memiliki 2 keluaran yaitu status dan message
@@ -309,10 +319,7 @@ if (isset($_POST['simpan'])) {
             $gambar = $cek_upload['message'];
         } else {
             //jika false maka message berisi pesan error, tampilkan dalam alert
-            echo "<script>
-                alert('" . $cek_upload['message'] . "');
-                document.location='admin.php?page=article';
-            </script>";
+            alert_redirect($cek_upload['message'], 'admin.php?page=article');
             die;
         }
     }
@@ -320,30 +327,42 @@ if (isset($_POST['simpan'])) {
     //cek apakah ada id yang dikirimkan dari form
     if (isset($_POST['id'])) {
         //jika ada id, lakukan update data dengan id tersebut
-        $id = $_POST['id'];
+        $id = (int) $_POST['id'];
+
+        //nama gambar lama diambil dari database, bukan dari form (supaya tidak bisa dimanipulasi)
+        $stmt = $conn->prepare("SELECT gambar FROM article WHERE id = ?");
+        $stmt->bind_param("i", $id);
+        $stmt->execute();
+        $lama = $stmt->get_result()->fetch_assoc();
+        $stmt->close();
+        $gambar_lama = $lama['gambar'] ?? '';
 
         if ($nama_gambar == '') {
             //jika tidak ganti gambar
-            $gambar = $_POST['gambar_lama'];
-        } else {
-            //jika ganti gambar, hapus gambar lama
-            if (file_exists("img/" . $_POST['gambar_lama'])) {
-                unlink("img/" . $_POST['gambar_lama']);
-            }
+            $gambar = $gambar_lama;
         }
 
-        $stmt = $conn->prepare("UPDATE article 
-                                SET 
+        //ringkasan AI lama sudah tidak sesuai jika artikel diubah
+        $reset_ai = has_ai_summary_column($conn) ? ", ai_summary = NULL" : "";
+
+        $stmt = $conn->prepare("UPDATE article
+                                SET
                                 judul =?,
                                 isi =?,
                                 summary = ?,
                                 gambar = ?,
                                 tanggal = ?,
                                 username = ?
+                                $reset_ai
                                 WHERE id = ?");
 
         $stmt->bind_param("ssssssi", $judul, $isi, $summary, $gambar, $tanggal, $username, $id);
         $simpan = $stmt->execute();
+
+        //jika ganti gambar dan update berhasil, hapus gambar lama
+        if ($simpan && $nama_gambar != '' && $gambar_lama != $gambar) {
+            delete_image($conn, $gambar_lama);
+        }
     } else {
         //jika tidak ada id, lakukan insert data baru
         $stmt = $conn->prepare("INSERT INTO article (judul,isi,summary,gambar,tanggal,username)
@@ -354,15 +373,9 @@ if (isset($_POST['simpan'])) {
     }
 
     if ($simpan) {
-        echo "<script>
-            alert('Simpan data sukses');
-            document.location='admin.php?page=article';
-        </script>";
+        alert_redirect('Simpan data sukses', 'admin.php?page=article');
     } else {
-        echo "<script>
-            alert('Simpan data gagal');
-            document.location='admin.php?page=article';
-        </script>";
+        alert_redirect('Simpan data gagal', 'admin.php?page=article');
     }
 
     $stmt->close();
@@ -371,31 +384,31 @@ if (isset($_POST['simpan'])) {
 
 //jika tombol hapus diklik
 if (isset($_POST['hapus'])) {
-    $id = $_POST['id'];
-    $gambar = $_POST['gambar'];
+    verify_csrf();
 
-    if ($gambar != '') {
-        //hapus file gambar
-        if (file_exists("img/" . $gambar)) {
-            unlink("img/" . $gambar);
-        }
-    }
+    $id = (int) $_POST['id'];
+
+    //ambil nama gambar dari database, bukan dari form
+    $stmt = $conn->prepare("SELECT gambar FROM article WHERE id = ?");
+    $stmt->bind_param("i", $id);
+    $stmt->execute();
+    $row = $stmt->get_result()->fetch_assoc();
+    $stmt->close();
 
     $stmt = $conn->prepare("DELETE FROM article WHERE id =?");
 
     $stmt->bind_param("i", $id);
     $hapus = $stmt->execute();
 
+    if ($hapus && $row) {
+        //hapus file gambar
+        delete_image($conn, $row['gambar']);
+    }
+
     if ($hapus) {
-        echo "<script>
-            alert('Hapus data sukses');
-            document.location='admin.php?page=article';
-        </script>";
+        alert_redirect('Hapus data sukses', 'admin.php?page=article');
     } else {
-        echo "<script>
-            alert('Hapus data gagal');
-            document.location='admin.php?page=article';
-        </script>";
+        alert_redirect('Hapus data gagal', 'admin.php?page=article');
     }
 
     $stmt->close();

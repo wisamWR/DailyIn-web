@@ -1,31 +1,34 @@
 <?php
 date_default_timezone_set('Asia/Jakarta');
 
-$envFile = __DIR__ . '/.env';
-$ENV = [];
+require_once __DIR__ . '/env.php';
 
-if (file_exists($envFile)) {
-    $lines = file($envFile, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
-    foreach ($lines as $line) {
-        if (strpos(trim($line), '#') === 0) continue;
-        if (strpos($line, '=') !== false) {
-            list($name, $value) = explode('=', $line, 2);
-            $ENV[trim($name)] = trim(trim($value), "\"'");
-        }
-    }
-}
+$servername = env('DB_SERVER');
+$username   = env('DB_USERNAME');
+$password   = env('DB_PASSWORD');
+$db         = env('DB_NAME');
+$port       = (int) env('DB_PORT', 3306);
 
-// Ambil dari array biasa, bukan getenv()
-$servername = $ENV['DB_SERVER'] ?? '';
-$username   = $ENV['DB_USERNAME'] ?? '';
-$password   = $ENV['DB_PASSWORD'] ?? '';
-$db         = $ENV['DB_NAME'] ?? '';
-
-// Debug sementara
-// var_dump($ENV);
-
-$conn = new mysqli($servername, $username, $password, $db);
+// Jangan tampilkan pesan error mysqli ke pengunjung (bisa membocorkan info server)
+mysqli_report(MYSQLI_REPORT_OFF);
+$conn = @new mysqli($servername, $username, $password, $db, $port);
 
 if ($conn->connect_error) {
-    die("Connection failed: " . $conn->connect_error);
+    error_log("DB connection failed: " . $conn->connect_error);
+    http_response_code(500);
+    die("Koneksi database gagal.");
+}
+
+// utf8mb4 supaya emoji & karakter non-latin tersimpan dengan benar
+$conn->set_charset('utf8mb4');
+
+// Cek apakah kolom cache ringkasan AI sudah ada (lihat migrations/001_hardening.sql)
+function has_ai_summary_column($conn)
+{
+    static $has = null;
+    if ($has === null) {
+        $res = $conn->query("SHOW COLUMNS FROM article LIKE 'ai_summary'");
+        $has = $res && $res->num_rows > 0;
+    }
+    return $has;
 }

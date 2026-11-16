@@ -1,11 +1,19 @@
 <?php
-session_start();
+require_once "auth.php";
+
+//check jika belum ada user yang login arahkan ke halaman login (dan hentikan script)
+require_login();
 
 include "koneksi.php";
 
-//check jika belum ada user yang login arahkan ke halaman login
-if (!isset($_SESSION['username'])) {
-    header("location:login.php");
+// penanda bahwa halaman di-include lewat admin.php (bukan diakses langsung)
+define('DAILYIN_ADMIN', true);
+
+// hanya halaman di daftar ini yang boleh di-include
+$pages = ['dashboard', 'article', 'gallery', 'password'];
+$page = $_GET['page'] ?? 'dashboard';
+if (!in_array($page, $pages, true)) {
+    $page = 'dashboard';
 }
 ?>
 
@@ -26,6 +34,10 @@ if (!isset($_SESSION['username'])) {
         integrity="sha384-T3c6CoIi6uLrA9TneNEoa7RxnatzjcDSCmG1MXxSR1GAsXEV/Dwwykc2MPK8M2HN"
         crossorigin="anonymous" />
     <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.7.1/jquery.min.js"></script>
+    <script>
+        // kirim CSRF token di setiap request AJAX (ai_helper.php, *_data.php)
+        $.ajaxSetup({ headers: { 'X-CSRF-Token': <?= json_encode(csrf_token()) ?> } });
+    </script>
     <!-- Summernote CSS -->
     <link href="https://cdn.jsdelivr.net/npm/summernote@0.8.18/dist/summernote-lite.min.css" rel="stylesheet">
     <style>
@@ -76,9 +88,10 @@ if (!isset($_SESSION['username'])) {
                     </li>
                     <li class="nav-item dropdown">
                         <a class="nav-link dropdown-toggle text-primary fw-bold" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">
-                            <?= $_SESSION['username'] ?>
+                            <?= e($_SESSION['username']) ?>
                         </a>
                         <ul class="dropdown-menu">
+                            <li><a class="dropdown-item" href="admin.php?page=password">Ganti Password</a></li>
                             <li><a class="dropdown-item" href="logout.php">Logout</a></li>
                         </ul>
                     </li>
@@ -90,19 +103,8 @@ if (!isset($_SESSION['username'])) {
     <!-- content begin -->
     <section id="content" class="p-3 p-sm-5">
         <div class="container">
-            <?php
-            if (isset($_GET['page'])) {
-            ?>
-                <h4 class="lead display-6 pb-2 border-bottom border-primary-subtle"><?= ucfirst($_GET['page']) ?></h4>
-            <?php
-                include($_GET['page'] . ".php");
-            } else {
-            ?>
-                <h4 class="lead display-6 pb-2 border-bottom border-primary-subtle">Dashboard</h4>
-            <?php
-                include("dashboard.php");
-            }
-            ?>
+            <h4 class="lead display-6 pb-2 border-bottom border-primary-subtle"><?= e(ucfirst($page)) ?></h4>
+            <?php include($page . ".php"); ?>
         </div>
     </section>
     <!-- content end -->

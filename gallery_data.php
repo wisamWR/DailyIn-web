@@ -1,8 +1,18 @@
 <?php
+require_once "auth.php";
+
+//endpoint ini hanya untuk admin
+require_login_json();
+
 include "koneksi.php";
 
-$hlm = (isset($_POST['hlm'])) ? $_POST['hlm'] : 1;
 $limit = 3;
+$total_records = (int) $conn->query("SELECT COUNT(*) AS total FROM gallery")->fetch_assoc()['total'];
+$jumlah_page = max(1, (int) ceil($total_records / $limit));
+
+//nomor halaman harus angka 1..jumlah_page
+$hlm = (int) ($_POST['hlm'] ?? 1);
+$hlm = min(max($hlm, 1), $jumlah_page);
 $limit_start = ($hlm - 1) * $limit;
 $no = $limit_start + 1;
 
@@ -27,16 +37,16 @@ $hasil = $conn->query($sql);
             <tr>
                 <td><?= $no++ ?></td>
                 <td>
-                    <strong><?= $row["judul"] ?></strong>
-                    <br>pada : <?= $row["tanggal"] ?>
-                    <br>oleh : <?= $row["username"] ?>
+                    <strong><?= e($row["judul"]) ?></strong>
+                    <br>pada : <?= e($row["tanggal"]) ?>
+                    <br>oleh : <?= e($row["username"]) ?>
                 </td>
                 <td>
                     <?php
                     if ($row["gambar"] != '') {
                         if (file_exists('img/' . $row["gambar"] . '')) {
                     ?>
-                            <img src="img/<?= $row["gambar"] ?>" width="100">
+                            <img src="img/<?= e($row["gambar"]) ?>" width="100">
                     <?php
                         }
                     }
@@ -44,11 +54,11 @@ $hasil = $conn->query($sql);
                 </td>
                 <td>
                     <!-- untuk tombol aksi update dan delete -->
-                    <a href="#" title="edit" class="badge rounded-pill text-bg-success" data-bs-toggle="modal" data-bs-target="#modalEdit<?= $row["id"] ?>"><i class="bi bi-pencil"></i></a>
-                    <a href="#" title="delete" class="badge rounded-pill text-bg-danger" data-bs-toggle="modal" data-bs-target="#modalHapus<?= $row["id"] ?>"><i class="bi bi-x-circle"></i></a>
+                    <a href="#" title="edit" class="badge rounded-pill text-bg-success" data-bs-toggle="modal" data-bs-target="#modalEdit<?= e($row["id"]) ?>"><i class="bi bi-pencil"></i></a>
+                    <a href="#" title="delete" class="badge rounded-pill text-bg-danger" data-bs-toggle="modal" data-bs-target="#modalHapus<?= e($row["id"]) ?>"><i class="bi bi-x-circle"></i></a>
 
                     <!-- Awal Modal Edit -->
-                    <div class="modal fade" id="modalEdit<?= $row["id"] ?>" data-bs-backdrop="static" data-bs-keyboard="false" tabindex="-1" aria-labelledby="staticBackdropLabel" aria-hidden="true">
+                    <div class="modal fade" id="modalEdit<?= e($row["id"]) ?>" data-bs-backdrop="static" data-bs-keyboard="false" tabindex="-1" aria-labelledby="staticBackdropLabel" aria-hidden="true">
                         <div class="modal-dialog">
                             <div class="modal-content">
                                 <div class="modal-header">
@@ -56,11 +66,12 @@ $hasil = $conn->query($sql);
                                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                                 </div>
                                 <form method="post" action="" enctype="multipart/form-data">
+                                    <?= csrf_field() ?>
                                     <div class="modal-body">
                                         <div class="mb-3">
                                             <label for="formGroupExampleInput" class="form-label">Judul</label>
-                                            <input type="hidden" name="id" value="<?= $row["id"] ?>">
-                                            <input type="text" class="form-control" name="judul" placeholder="Tuliskan Judul Gallery" value="<?= $row["judul"] ?>" required>
+                                            <input type="hidden" name="id" value="<?= e($row["id"]) ?>">
+                                            <input type="text" class="form-control" name="judul" placeholder="Tuliskan Judul Gallery" value="<?= e($row["judul"]) ?>" required>
                                         </div>
                                         <div class="mb-3">
                                             <label for="formGroupExampleInput2" class="form-label">Ganti Gambar</label>
@@ -72,12 +83,11 @@ $hasil = $conn->query($sql);
                                             if ($row["gambar"] != '') {
                                                 if (file_exists('img/' . $row["gambar"] . '')) {
                                             ?>
-                                                    <br><img src="img/<?= $row["gambar"] ?>" width="100">
+                                                    <br><img src="img/<?= e($row["gambar"]) ?>" width="100">
                                             <?php
                                                 }
                                             }
                                             ?>
-                                            <input type="hidden" name="gambar_lama" value="<?= $row["gambar"] ?>">
                                         </div>
                                     </div>
                                     <div class="modal-footer">
@@ -91,7 +101,7 @@ $hasil = $conn->query($sql);
                     <!-- Akhir Modal Edit -->
 
                     <!-- Awal Modal Hapus -->
-                    <div class="modal fade" id="modalHapus<?= $row["id"] ?>" data-bs-backdrop="static" data-bs-keyboard="false" tabindex="-1" aria-labelledby="staticBackdropLabel" aria-hidden="true">
+                    <div class="modal fade" id="modalHapus<?= e($row["id"]) ?>" data-bs-backdrop="static" data-bs-keyboard="false" tabindex="-1" aria-labelledby="staticBackdropLabel" aria-hidden="true">
                         <div class="modal-dialog">
                             <div class="modal-content">
                                 <div class="modal-header">
@@ -99,10 +109,10 @@ $hasil = $conn->query($sql);
                                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                                 </div>
                                 <form method="post" action="">
+                                    <?= csrf_field() ?>
                                     <div class="modal-body">
-                                        <p>Yakin akan menghapus gallery <strong><?= $row["judul"] ?></strong>?</p>
-                                        <input type="hidden" name="hapus" value="<?= $row["id"] ?>">
-                                        <input type="hidden" name="gambar" value="<?= $row["gambar"] ?>">
+                                        <p>Yakin akan menghapus gallery <strong><?= e($row["judul"]) ?></strong>?</p>
+                                        <input type="hidden" name="id" value="<?= e($row["id"]) ?>">
                                     </div>
                                     <div class="modal-footer">
                                         <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Batal</button>
@@ -122,15 +132,11 @@ $hasil = $conn->query($sql);
 </table>
 
 <?php
-$sql1 = "SELECT * FROM gallery";
-$hasil1 = $conn->query($sql1);
-$total_records = $hasil1->num_rows;
 ?>
 <p>Total gallery : <?php echo $total_records; ?></p>
 <nav class="mb-2">
     <ul class="pagination justify-content-end">
         <?php
-        $jumlah_page = ceil($total_records / $limit);
         $jumlah_number = 1; //jumlah halaman ke kanan dan kiri dari halaman yang aktif
         $start_number = ($hlm > $jumlah_number) ? $hlm - $jumlah_number : 1;
         $end_number = ($hlm < ($jumlah_page - $jumlah_number)) ? $hlm + $jumlah_number : $jumlah_page;
