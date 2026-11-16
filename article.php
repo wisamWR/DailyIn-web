@@ -286,6 +286,42 @@ require_once __DIR__ . '/article_fields.php';
             });
         });
 
+        // Deteksi mood dari isi tulisan (form tambah & edit)
+        $(document).on('click', '.btn-deteksi-mood', function() {
+            var btn = $(this);
+            var form = btn.closest('form');
+            var judul = form.find('input[name="judul"]').val();
+            var isiEl = form.find('textarea[name="isi"]');
+            var isi = isiEl.next('.note-editor').length ? $("<div/>").html(isiEl.summernote('code')).text() : isiEl.val();
+
+            if ($.trim(isi) === '') {
+                alert('Isi artikel terlebih dahulu!');
+                return;
+            }
+
+            var originalText = btn.html();
+            btn.prop('disabled', true).html('<span class="spinner-border spinner-border-sm"></span>');
+
+            $.ajax({
+                url: 'ai_helper.php',
+                type: 'POST',
+                contentType: 'application/json',
+                data: JSON.stringify({ text: isi, title: judul, mode: 'generate_mood' }),
+                success: function(response) {
+                    if (response.result) {
+                        form.find('select[name="mood"]').val(response.result);
+                    } else if (response.error) {
+                        alert('AI Error: ' + response.error);
+                    }
+                    btn.prop('disabled', false).html(originalText);
+                },
+                error: function() {
+                    alert('Gagal menghubungi AI Helper.');
+                    btn.prop('disabled', false).html(originalText);
+                }
+            });
+        });
+
         // 2. Generate Summary di Edit Modal
         $(document).on('click', '.btn-ringkas-edit', function() {
             var btn = $(this);
@@ -365,6 +401,9 @@ if (isset($_POST['simpan'])) {
         }
     }
 
+    //mood entri jurnal (hanya nilai yang dikenal)
+    $mood = valid_mood($_POST['mood'] ?? '');
+
     //slug URL: dari isian, atau otomatis dari judul (selalu dibuat unik)
     $slug_input = trim($_POST['slug'] ?? '');
     $slug = unique_slug($slug_input !== '' ? $slug_input : $judul, $id);
@@ -410,9 +449,10 @@ if (isset($_POST['simpan'])) {
                                 tanggal = ?,
                                 username = ?,
                                 status = ?,
-                                published_at = ?
+                                published_at = ?,
+                                mood = ?
                                 $reset_ai
-                                WHERE id = ?", [$judul, $slug, $isi, $summary, $gambar, $tanggal, $username, $status, $published_at, $id]);
+                                WHERE id = ?", [$judul, $slug, $isi, $summary, $gambar, $tanggal, $username, $status, $published_at, $mood, $id]);
 
         //jika ganti gambar dan update berhasil, hapus gambar lama
         if ($simpan && $nama_gambar != '' && $gambar_lama != $gambar) {
@@ -420,8 +460,8 @@ if (isset($_POST['simpan'])) {
         }
     } else {
         //jika tidak ada id, lakukan insert data baru
-        $simpan = db_run("INSERT INTO article (judul,slug,isi,summary,gambar,tanggal,username,status,published_at)
-                                VALUES (?,?,?,?,?,?,?,?,?)", [$judul, $slug, $isi, $summary, $gambar, $tanggal, $username, $status, $published_at]);
+        $simpan = db_run("INSERT INTO article (judul,slug,isi,summary,gambar,tanggal,username,status,published_at,mood)
+                                VALUES (?,?,?,?,?,?,?,?,?,?)", [$judul, $slug, $isi, $summary, $gambar, $tanggal, $username, $status, $published_at, $mood]);
         $id = $simpan ? (int) db_value("SELECT id FROM article WHERE slug = ?", [$slug]) : 0;
     }
 

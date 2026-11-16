@@ -27,6 +27,9 @@ jobs:
       - name: PHPStan (level 5)
         run: phpstan analyse --no-progress --memory-limit=512M
 
+      - name: Unit tests
+        run: php tests/unit.php
+
   e2e:
     name: E2E (${{ matrix.db }})
     runs-on: ubuntu-latest

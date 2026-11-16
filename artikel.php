@@ -21,6 +21,11 @@ if (!$article || ($is_preview && !is_logged_in())) {
   exit;
 }
 
+// hitung view pengunjung (bukan admin/bot, sekali per sesi); pratinjau tidak dihitung
+if (!$is_preview && count_article_view($article['id'])) {
+  $article['views'] = (int) ($article['views'] ?? 0) + 1;
+}
+
 $tags = tags_for_articles([$article['id']])[(int) $article['id']];
 $isi_html = sanitize_html($article['isi'] ?? '');
 $description = $article['summary'] != '' ? excerpt($article['summary'], 160) : excerpt($isi_html, 160);
@@ -124,6 +129,10 @@ $share_text = rawurlencode($article['judul'] . ' ' . $canonical);
         <p class="text-muted mb-2">
           <i class="bi bi-calendar3"></i> <?= e(display_date($article)) ?>
           &middot; <i class="bi bi-person"></i> <?= e($article['username'] ?: 'admin') ?>
+          &middot; <i class="bi bi-eye"></i> <?= number_format((int) ($article['views'] ?? 0), 0, ',', '.') ?>x dibaca
+          <?php if (mood_label($article['mood'] ?? null) !== '') : ?>
+            &middot; <span title="Mood penulis">Mood: <?= e(mood_label($article['mood'])) ?></span>
+          <?php endif; ?>
         </p>
         <?php foreach ($tags as $tag) : ?>
           <a href="<?= e(url('tag/' . $tag['slug'])) ?>#article" class="badge text-bg-light border text-decoration-none me-1">#<?= e($tag['name']) ?></a>

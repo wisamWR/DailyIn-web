@@ -229,6 +229,51 @@ r=$(curl -s -b "$J" -H "X-CSRF-Token: $T" -H 'Content-Type: application/json' -d
 # lolos login + CSRF dan sampai ke pemanggilan AI (hasilnya tergantung key/jaringan, jadi result atau error sama-sama OK)
 case "$r" in *login*|*CSRF*) bad "ai caption passes auth" "$r";; *'"result"'*|*'"error"'*) ok "ai caption passes auth ($(echo "$r" | cut -c1-60))";; *) bad "ai caption passes auth" "$r";; esac
 
+echo "== Fase 4: mood, view, dashboard jurnal =="
+TJ=$(token "$B/admin.php?page=article")
+curl -s -o /dev/null -b "$J" -c "$J" -F "csrf_token=$TJ" -F 'simpan=1' --form-string 'judul=Jurnal Hari Ini' --form-string 'isi=<p>Hari yang menyenangkan</p>' -F 'status=published' -F 'mood=senang' "$B/admin.php?page=article"
+JID=$(SQL "SELECT id FROM article WHERE judul='Jurnal Hari Ini'")
+check "mood saved" "$(SQL "SELECT mood FROM article WHERE id=$JID")" "senang"
+curl -s -o /dev/null -b "$J" -c "$J" -F "csrf_token=$TJ" -F 'simpan=1' -F "id=$JID" --form-string 'judul=Jurnal Hari Ini' --form-string 'isi=<p>Hari yang menyenangkan</p>' -F 'status=published' --form-string 'mood=<script>' --form-string 'slug=jurnal-hari-ini' "$B/admin.php?page=article"
+check "invalid mood stored as null" "$(SQL "SELECT CASE WHEN mood IS NULL THEN 'null' ELSE mood END FROM article WHERE id=$JID")" "null"
+curl -s -o /dev/null -b "$J" -c "$J" -F "csrf_token=$TJ" -F 'simpan=1' -F "id=$JID" --form-string 'judul=Jurnal Hari Ini' --form-string 'isi=<p>Hari yang menyenangkan</p>' -F 'status=published' -F 'mood=senang' --form-string 'slug=jurnal-hari-ini' "$B/admin.php?page=article"
+check "article page shows mood" "$(curl -s "$B/artikel/jurnal-hari-ini" | grep -c 'Mood: .* Senang')" "1"
+
+# view: pengunjung dengan browser dihitung sekali per sesi; admin, bot, dan curl tanpa UA browser tidak
+UA='Mozilla/5.0 (X11; Linux x86_64) DailyInTest'
+V="$TMP/visitor.txt"
+curl -s -o /dev/null -A "$UA" -b "$V" -c "$V" "$B/artikel/jurnal-hari-ini"
+check "visitor view counted" "$(SQL "SELECT views FROM article WHERE id=$JID")" "1"
+curl -s -o /dev/null -A "$UA" -b "$V" -c "$V" "$B/artikel/jurnal-hari-ini"
+check "same session not counted twice" "$(SQL "SELECT views FROM article WHERE id=$JID")" "1"
+curl -s -o /dev/null -A "$UA" "$B/artikel/jurnal-hari-ini"
+check "new visitor counted" "$(SQL "SELECT views FROM article WHERE id=$JID")" "2"
+curl -s -o /dev/null -A "$UA" -b "$J" "$B/artikel/jurnal-hari-ini"
+check "admin view not counted" "$(SQL "SELECT views FROM article WHERE id=$JID")" "2"
+curl -s -o /dev/null -A 'Googlebot/2.1' "$B/artikel/jurnal-hari-ini"
+curl -s -o /dev/null -A 'WhatsApp/2.23' "$B/artikel/jurnal-hari-ini"
+check "bot & link preview not counted" "$(SQL "SELECT views FROM article WHERE id=$JID")" "2"
+check "article page shows views" "$(curl -s "$B/artikel/jurnal-hari-ini" | grep -c '2x dibaca')" "1"
+
+# entri setahun lalu untuk "hari ini di tahun lalu"
+LAST_YEAR=$(php -r 'echo date("Y-m-d", strtotime("-1 year")), " 09:00:00";')
+SQL "INSERT INTO article (judul, slug, isi, tanggal, username, status, published_at, mood) VALUES ('Kenangan Tahun Lalu', 'kenangan-tahun-lalu', '<p>dulu</p>', '$LAST_YEAR', 'admin', 'published', '$LAST_YEAR', 'lelah')" >/dev/null
+
+DASH=$(curl -s -b "$J" "$B/admin.php?page=dashboard")
+check "dashboard streak today" "$(echo "$DASH" | grep -c 'id="statStreak">1 hari')" "1"
+check "dashboard total views" "$(echo "$DASH" | grep -c 'id="statViews">2<')" "1"
+check "heatmap rendered (26x7 cells)" "$(echo "$DASH" | grep -o 'class="heat-cell l[0-4]"\|class="heat-cell future"' | wc -l | tr -d ' ')" "186"
+some "heatmap has today's entry" "$(echo "$DASH" | grep -c 'heat-cell l[1-4]')"
+check "mood chart counts senang" "$(echo "$DASH" | grep -c 'data-mood="senang">1<')" "1"
+check "popular article listed" "$(echo "$DASH" | grep -A4 'id="popularList"' | grep -c 'Jurnal Hari Ini')" "1"
+check "on this day shows last year" "$(echo "$DASH" | grep -c '1 tahun lalu')" "1"
+check "ai usage logged caption" "$(echo "$DASH" | grep -c 'data-mode="generate_caption"')" "1"
+check "ai usage logged summary" "$(echo "$DASH" | grep -c 'data-mode="generate_summary"')" "1"
+check "no PHP warnings on dashboard" "$(echo "$DASH" | grep -c -E '(Deprecated|Warning|Notice|Fatal error)(</b>)?:')" "0"
+r=$(curl -s -b "$J" -H "X-CSRF-Token: $TJ" -H 'Content-Type: application/json' -d '{"mode":"generate_mood","text":"Hari ini aku senang sekali","title":"x"}' "$B/ai_helper.php")
+case "$r" in *login*|*CSRF*) bad "ai mood passes auth" "$r";; *'"result"'*|*'"error"'*) ok "ai mood passes auth";; *) bad "ai mood passes auth" "$r";; esac
+check "ai mood guest 401" "$(code -H 'Content-Type: application/json' -d '{"mode":"generate_mood","text":"x"}' "$B/ai_helper.php")" "401"
+
 echo "== Password change =="
 TP=$(token "$B/admin.php?page=password")
 curl -s -o /dev/null -b "$J" -d "csrf_token=$TP&ganti_password=1&password_lama=123456&password_baru=RahasiaBaru99&password_ulang=RahasiaBaru99" "$B/admin.php?page=password"

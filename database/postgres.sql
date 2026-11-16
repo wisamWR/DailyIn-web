@@ -14,7 +14,10 @@ CREATE TABLE article (
   username VARCHAR(50),
   -- draft | published; published_at di masa depan = terjadwal
   status VARCHAR(10) NOT NULL DEFAULT 'published',
-  published_at TIMESTAMP
+  published_at TIMESTAMP,
+  -- mood entri jurnal (senang, semangat, biasa, lelah, sedih, cemas, marah) & jumlah dibaca
+  mood VARCHAR(20),
+  views INTEGER NOT NULL DEFAULT 0
 );
 
 CREATE TABLE gallery (
@@ -62,6 +65,16 @@ CREATE TABLE article_tag (
   PRIMARY KEY (article_id, tag_id)
 );
 CREATE INDEX article_tag_tag ON article_tag (tag_id);
+
+-- Catatan pemakaian AI (statistik dashboard)
+CREATE TABLE ai_usage (
+  id SERIAL PRIMARY KEY,
+  mode VARCHAR(30) NOT NULL,
+  model VARCHAR(60) NOT NULL,
+  success SMALLINT NOT NULL,
+  created_at TIMESTAMP NOT NULL
+);
+CREATE INDEX ai_usage_created ON ai_usage (created_at);
 
 INSERT INTO article (id, judul, slug, isi, gambar, tanggal, username, status, published_at) VALUES
 (1, 'Perpustakaan Kampus', 'perpustakaan-kampus', NULL, 'book.jpg', '2025-12-10 13:30:06', 'admin', 'published', '2025-12-10 13:30:06'),

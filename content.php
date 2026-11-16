@@ -132,7 +132,8 @@ function parse_tags($input)
         $slug = slugify($name);
         // lewati tag kosong atau tanpa huruf/angka latin (slugify jatuh ke nilai default "artikel")
         if ($name === '' || ($slug === 'artikel' && stripos($name, 'artikel') === false)) continue;
-        $tags[$slug] = $name;
+        // tag kembar (beda huruf besar/kecil): pakai ejaan pertama yang ditulis
+        if (!isset($tags[$slug])) $tags[$slug] = $name;
         if (count($tags) >= 8) break;
     }
     return $tags; // [slug => nama]

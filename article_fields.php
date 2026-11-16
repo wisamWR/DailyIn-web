@@ -11,7 +11,22 @@ function render_article_fields($row = null, $tags_value = '')
     $status = $row['status'] ?? 'published';
     $published_at = !empty($row['published_at']) ? date('Y-m-d\TH:i', strtotime($row['published_at'])) : '';
     $slug = $row['slug'] ?? '';
+    $mood = $row['mood'] ?? '';
 ?>
+    <div class="mb-3">
+        <div class="d-flex justify-content-between align-items-center mb-2">
+            <label class="form-label small text-muted mb-0">MOOD HARI INI</label>
+            <button type="button" class="btn btn-outline-secondary btn-sm btn-deteksi-mood">
+                <i class="bi bi-emoji-smile"></i> Deteksi (AI)
+            </button>
+        </div>
+        <select name="mood" class="form-select">
+            <option value="">— Tanpa mood —</option>
+            <?php foreach (MOODS as $key => [$emoji, $label]) : ?>
+                <option value="<?= e($key) ?>" <?= $mood === $key ? 'selected' : '' ?>><?= $emoji ?> <?= e($label) ?></option>
+            <?php endforeach; ?>
+        </select>
+    </div>
     <div class="mb-3">
         <label class="form-label small text-muted">STATUS</label>
         <select name="status" class="form-select">
