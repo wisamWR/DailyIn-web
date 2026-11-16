@@ -23,6 +23,7 @@ if ($apiKey === '' && file_exists(__DIR__ . '/config_ai.php')) {
 // jadi tidak 404 saat versi lama dihentikan Google
 $models_to_try = array_filter(array_map('trim', explode(',', env('GEMINI_MODELS', 'gemini-flash-lite-latest,gemini-flash-latest'))));
 
+/** @return never */
 function json_out($data, $code = 200)
 {
     http_response_code($code);

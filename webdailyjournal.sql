@@ -97,6 +97,21 @@ INSERT INTO `user` (`id`, `username`, `password`, `foto`) VALUES
 (1, 'admin', '$2y$12$vM1ESMjsvcWeeB/HL/hUceAFpPghH2K9fGPbPKysDzSDzazxNcpGq', '');
 
 --
+-- Table structure for table `login_attempts` (batas percobaan login)
+--
+
+CREATE TABLE `login_attempts` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `ip` varchar(64) NOT NULL,
+  `username` varchar(50) NOT NULL,
+  `attempted_at` int(11) NOT NULL,
+  PRIMARY KEY (`id`),
+  KEY `login_attempts_lookup` (`ip`,`username`,`attempted_at`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- --------------------------------------------------------
+
+--
 -- Indexes for dumped tables
 --
 

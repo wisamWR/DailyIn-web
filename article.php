@@ -96,8 +96,8 @@ if (!defined('DAILYIN_ADMIN')) {
     $(document).ready(function() {
         load_data();
 
-        // Initialize Summernote
-        $('#isiArtikel').summernote({
+        // Pengaturan Summernote, dipakai di form tambah dan form edit
+        var summernoteOptions = {
             tabsize: 2,
             height: 300,
             toolbar: [
@@ -109,7 +109,10 @@ if (!defined('DAILYIN_ADMIN')) {
                 ['insert', ['link', 'picture', 'video']],
                 ['view', ['fullscreen', 'codeview', 'help']]
             ]
-        });
+        };
+
+        // Initialize Summernote
+        $('#isiArtikel').summernote(summernoteOptions);
 
         function load_data(hlm) {
             $.ajax({
@@ -119,7 +122,12 @@ if (!defined('DAILYIN_ADMIN')) {
                     hlm: hlm
                 },
                 success: function(data) {
+                    // hapus editor lama sebelum tabel diganti, lalu aktifkan editor di setiap modal edit
+                    $('#article_data .summernote').each(function() {
+                        if ($(this).next('.note-editor').length) $(this).summernote('destroy');
+                    });
                     $('#article_data').html(data);
+                    $('#article_data .summernote').summernote(summernoteOptions);
                 }
             })
         }
@@ -200,12 +208,7 @@ if (!defined('DAILYIN_ADMIN')) {
         });
 
 
-        // 1. Generate Content di Edit Modal
-        // Note: Logic for Edit Modal might need similar Summernote updates if the edit modal uses a different ID or class for the textarea.
-        // Assuming 'textarea[name="isi"]' refers to the same element or a new one in a different modal. 
-        // If it's a dynamic modal (edit), standard summernote init might need to happen on modal show.
-        // For simplicity in this task, I will leave existing edit logic but warn that it needs Summernote support if it uses rich text too.
-        
+        // 1. Generate Content di Edit Modal (textarea edit sudah memakai Summernote)
         $(document).on('click', '.btn-kreasikan-edit', function() {
             var btn = $(this);
             var form = btn.closest('form');
@@ -319,7 +322,7 @@ if (isset($_POST['simpan'])) {
             $gambar = $cek_upload['message'];
         } else {
             //jika false maka message berisi pesan error, tampilkan dalam alert
-            alert_redirect($cek_upload['message'], 'admin.php?page=article');
+            alert_redirect($cek_upload['message'], 'admin.php?page=article', 'danger');
             die;
         }
     }
@@ -364,7 +367,7 @@ if (isset($_POST['simpan'])) {
     if ($simpan) {
         alert_redirect('Simpan data sukses', 'admin.php?page=article');
     } else {
-        alert_redirect('Simpan data gagal', 'admin.php?page=article');
+        alert_redirect('Simpan data gagal', 'admin.php?page=article', 'danger');
     }
 }
 
@@ -387,7 +390,7 @@ if (isset($_POST['hapus'])) {
     if ($hapus) {
         alert_redirect('Hapus data sukses', 'admin.php?page=article');
     } else {
-        alert_redirect('Hapus data gagal', 'admin.php?page=article');
+        alert_redirect('Hapus data gagal', 'admin.php?page=article', 'danger');
     }
 }
 ?>

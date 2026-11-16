@@ -37,6 +37,15 @@ CREATE TABLE sessions (
 );
 CREATE INDEX sessions_updated_at ON sessions (updated_at);
 
+-- Catatan login gagal (batas percobaan login)
+CREATE TABLE login_attempts (
+  id SERIAL PRIMARY KEY,
+  ip VARCHAR(64) NOT NULL,
+  username VARCHAR(50) NOT NULL,
+  attempted_at INTEGER NOT NULL
+);
+CREATE INDEX login_attempts_lookup ON login_attempts (ip, username, attempted_at);
+
 INSERT INTO article (id, judul, isi, gambar, tanggal, username) VALUES
 (1, 'Perpustakaan Kampus', NULL, 'book.jpg', '2025-12-10 13:30:06', 'admin'),
 (2, 'Ruang Kelas', NULL, 'class.jpg', '2025-12-10 13:34:30', 'admin'),

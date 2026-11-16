@@ -1,0 +1,93 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    name: Lint + PHPStan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.4"
+          tools: phpstan
+          coverage: none
+
+      - name: PHP syntax check
+        run: find . -name '*.php' -not -path './vendor/*' -print0 | xargs -0 -n1 php -l
+
+      - name: PHPStan (level 5)
+        run: phpstan analyse --no-progress --memory-limit=512M
+
+  e2e:
+    name: E2E (${{ matrix.db }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        db: [pgsql, mysql]
+
+    services:
+      postgres:
+        image: ${{ matrix.db == 'pgsql' && 'postgres:17' || '' }}
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: dailyin
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+      mysql:
+        image: ${{ matrix.db == 'mysql' && 'mysql:8.4' || '' }}
+        env:
+          MYSQL_ROOT_PASSWORD: root
+        ports: ["3306:3306"]
+        options: >-
+          --health-cmd "mysqladmin ping -proot"
+          --health-interval 5s --health-timeout 5s --health-retries 20
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.4"
+          extensions: pdo_pgsql, pdo_mysql, gd, curl, dom, mbstring
+          coverage: none
+
+      - name: Configure app (.env)
+        run: |
+          if [ "${{ matrix.db }}" = pgsql ]; then
+            printf 'DATABASE_URL=postgresql://postgres:postgres@127.0.0.1:5432/dailyin?sslmode=disable\nSESSION_DRIVER=database\n' > .env
+          else
+            printf 'DB_SERVER=127.0.0.1\nDB_PORT=3306\nDB_USERNAME=root\nDB_PASSWORD=root\nDB_NAME=dailyin_ci\n' > .env
+          fi
+          echo 'GEMINI_API_KEY=dummy-key-for-ci' >> .env
+
+      - name: Start PHP server
+        run: |
+          php -S 127.0.0.1:8099 -t . > /tmp/php-server.log 2>&1 &
+          for i in $(seq 1 20); do curl -s -o /dev/null http://127.0.0.1:8099/login.php && break; sleep 1; done
+
+      - name: Run e2e tests
+        env:
+          DB_DRIVER: ${{ matrix.db }}
+          PGURL: postgresql://postgres:postgres@127.0.0.1:5432/dailyin
+          MYSQL_HOST: 127.0.0.1
+          MYSQL_PORT: "3306"
+          MYSQL_USER: root
+          MYSQL_PASSWORD: root
+          MYSQL_DATABASE: dailyin_ci
+        run: bash tests/e2e.sh
+
+      - name: PHP server log
+        if: failure()
+        run: cat /tmp/php-server.log

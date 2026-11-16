@@ -1,4 +1,13 @@
 <?php
+// Web server mengarahkan URL yang tidak dikenal ke index.php. Selain "/" dan "/index.php", tampilkan 404.
+$request_path = rawurldecode(parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH) ?: '/');
+$script_path = $_SERVER['SCRIPT_NAME'] ?? '/index.php';
+$base_path = rtrim(str_replace('\\', '/', dirname($script_path)), '/') . '/';
+if ($request_path !== $script_path && $request_path !== $base_path) {
+  require __DIR__ . '/404.php';
+  exit;
+}
+
 require_once 'auth.php';
 ?>
 <!DOCTYPE html>
@@ -136,7 +145,6 @@ require_once 'auth.php';
                 <a href="#" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#articleModal" 
                    data-id="<?= e($row["id"]) ?>"
                    data-judul="<?= e($row["judul"]) ?>" 
-                   data-isi="<?= e(sanitize_html($row["isi"])) ?>"
                    data-gambar="<?= e(image_url($row["gambar"])) ?>"
                    data-tanggal="<?= e($row["tanggal"]) ?>">
                    Baca Selengkapnya
@@ -434,10 +442,9 @@ require_once 'auth.php';
         // Tombol yang memicu modal
         const button = event.relatedTarget;
         
-        // Ambil data dari atribut data-bs-*
+        // Ambil data dari atribut data-bs-* (isi artikel diambil terpisah supaya halaman depan ringan)
         const id = button.getAttribute('data-id');
         const judul = button.getAttribute('data-judul');
-        const isi = button.getAttribute('data-isi');
         const gambar = button.getAttribute('data-gambar');
         const tanggal = button.getAttribute('data-tanggal');
 
@@ -448,9 +455,24 @@ require_once 'auth.php';
         const modalBodyTanggal = articleModal.querySelector('#modalTanggal');
 
         modalTitle.textContent = judul;
-        modalBodyIsi.innerHTML = isi; // Gunakan innerHTML agar tag HTML di isi (jika ada) ter-render
         modalBodyGambar.src = gambar;
         modalBodyTanggal.textContent = "Diposting pada: " + tanggal;
+        modalBodyIsi.innerHTML = '<div class="text-center text-muted py-4"><span class="spinner-border spinner-border-sm"></span> Memuat artikel...</div>';
+        articleModal.dataset.articleId = id;
+
+        // Isi artikel (HTML sudah dibersihkan di server lewat sanitize_html)
+        let isi = '';
+        fetch('api/get_article.php?id=' + encodeURIComponent(id))
+            .then(res => res.json())
+            .then(data => {
+                if (articleModal.dataset.articleId !== id) return; // modal sudah dibuka untuk artikel lain
+                isi = data.success ? (data.isi || '<p class="text-muted">Artikel ini belum memiliki isi.</p>') : '<p class="text-danger">Artikel tidak ditemukan.</p>';
+                modalBodyIsi.innerHTML = isi;
+            })
+            .catch(() => {
+                if (articleModal.dataset.articleId !== id) return;
+                modalBodyIsi.innerHTML = '<p class="text-danger">Gagal memuat artikel. Coba lagi.</p>';
+            });
 
         // Setup tombol Buat Ringkasan (Inline Toggle)
         const btnRingkasan = document.getElementById('btnBuatRingkasan');
@@ -461,7 +483,6 @@ require_once 'auth.php';
         
         // Variabel untuk menyimpan state ringkasan di closure ini
         let summaryContent = '';
-        const originalContent = isi; // Simpan konten asli
 
         btnRingkasan.onclick = async function() {
             // Cek text tombol untuk menentukan 'Mode'
@@ -527,7 +548,7 @@ require_once 'auth.php';
 
             } else {
                 // Mode 'Kembali ke Artikel'
-                modalBodyIsi.innerHTML = originalContent; // Restore asli
+                modalBodyIsi.innerHTML = isi; // Restore isi artikel asli
                 btnRingkasan.textContent = "Buat Ringkasan ✨";
                 btnRingkasan.className = "btn btn-warning";
             }

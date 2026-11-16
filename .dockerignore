@@ -14,3 +14,6 @@ database
 .htaccess
 img/.htaccess
 vercel.json
+tests
+.github
+phpstan.neon

@@ -93,7 +93,7 @@ if (isset($_POST['simpan'])) {
             $gambar = $cek_upload['message'];
         } else {
             //jika false maka message berisi pesan error, tampilkan dalam alert
-            alert_redirect($cek_upload['message'], 'admin.php?page=gallery');
+            alert_redirect($cek_upload['message'], 'admin.php?page=gallery', 'danger');
             die;
         }
     }
@@ -105,7 +105,7 @@ if (isset($_POST['simpan'])) {
     if ($simpan) {
         alert_redirect('Data berhasil disimpan', 'admin.php?page=gallery');
     } else {
-        alert_redirect('Data gagal disimpan', 'admin.php?page=gallery');
+        alert_redirect('Data gagal disimpan', 'admin.php?page=gallery', 'danger');
     }
 }
 
@@ -130,7 +130,7 @@ if (isset($_POST['edit'])) {
             $gambar = $cek_upload['message'];
         } else {
             //jika false maka message berisi pesan error, tampilkan dalam alert
-            alert_redirect($cek_upload['message'], 'admin.php?page=gallery');
+            alert_redirect($cek_upload['message'], 'admin.php?page=gallery', 'danger');
             die;
         }
     }
@@ -153,7 +153,7 @@ if (isset($_POST['edit'])) {
     if ($update) {
         alert_redirect('Data berhasil diupdate', 'admin.php?page=gallery');
     } else {
-        alert_redirect('Data gagal diupdate', 'admin.php?page=gallery');
+        alert_redirect('Data gagal diupdate', 'admin.php?page=gallery', 'danger');
     }
 }
 
@@ -175,7 +175,7 @@ if (isset($_POST['hapus'])) {
     if ($hapus) {
         alert_redirect('Data berhasil dihapus', 'admin.php?page=gallery');
     } else {
-        alert_redirect('Data gagal dihapus', 'admin.php?page=gallery');
+        alert_redirect('Data gagal dihapus', 'admin.php?page=gallery', 'danger');
     }
 }
 ?>

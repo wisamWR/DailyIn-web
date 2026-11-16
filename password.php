@@ -19,16 +19,16 @@ if (isset($_POST['ganti_password'])) {
         || (preg_match('/^[a-f0-9]{32}$/i', $user['password']) && hash_equals(strtolower($user['password']), md5($lama))));
 
     if (!$cocok) {
-        alert_redirect('Password lama salah', 'admin.php?page=password');
+        alert_redirect('Password lama salah', 'admin.php?page=password', 'danger');
     } elseif (strlen($baru) < 8) {
-        alert_redirect('Password baru minimal 8 karakter', 'admin.php?page=password');
+        alert_redirect('Password baru minimal 8 karakter', 'admin.php?page=password', 'danger');
     } elseif ($baru !== $ulang) {
-        alert_redirect('Konfirmasi password baru tidak sama', 'admin.php?page=password');
+        alert_redirect('Konfirmasi password baru tidak sama', 'admin.php?page=password', 'danger');
     } else {
         $hash = password_hash($baru, PASSWORD_DEFAULT);
         $simpan = db_run("UPDATE " . USER_TABLE . " SET password = ? WHERE id = ?", [$hash, $user['id']]);
 
-        alert_redirect($simpan ? 'Password berhasil diganti' : 'Password gagal diganti', 'admin.php?page=password');
+        alert_redirect($simpan ? 'Password berhasil diganti' : 'Password gagal diganti', 'admin.php?page=password', $simpan ? 'success' : 'danger');
     }
 }
 ?>

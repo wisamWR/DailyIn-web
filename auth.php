@@ -123,12 +123,63 @@ function e($value)
 }
 
 // Pindah halaman lewat JS alert (pola yang sudah dipakai di halaman admin)
-function alert_redirect($message, $location)
+// Simpan pesan untuk ditampilkan sebagai notifikasi (toast) di halaman berikutnya, lalu pindah halaman.
+// $type: success | danger | warning
+function alert_redirect($message, $location, $type = 'success')
 {
-    echo "<script>
-        alert(" . json_encode($message) . ");
-        document.location=" . json_encode($location) . ";
-    </script>";
+    $_SESSION['flash'] = ['message' => (string) $message, 'type' => $type];
+    echo "<script>document.location=" . json_encode($location) . ";</script>";
+    echo '<noscript><meta http-equiv="refresh" content="0;url=' . e($location) . '"></noscript>';
+}
+
+// Ambil pesan flash (sekali pakai)
+function take_flash()
+{
+    $flash = $_SESSION['flash'] ?? null;
+    unset($_SESSION['flash']);
+    return $flash;
+}
+
+// IP pengunjung. Di Vercel request lewat proxy, jadi IP asli ada di header X-Real-IP / X-Forwarded-For
+function client_ip()
+{
+    if (env('VERCEL') !== '') {
+        $ip = $_SERVER['HTTP_X_REAL_IP'] ?? trim(explode(',', $_SERVER['HTTP_X_FORWARDED_FOR'] ?? '')[0]);
+        if (filter_var($ip, FILTER_VALIDATE_IP)) return $ip;
+    }
+    return $_SERVER['REMOTE_ADDR'] ?? '0.0.0.0';
+}
+
+// Batas percobaan login: maksimal LOGIN_MAX_ATTEMPTS gagal per IP + username dalam LOGIN_WINDOW detik
+const LOGIN_MAX_ATTEMPTS = 5;
+const LOGIN_WINDOW = 900;
+
+// Sisa detik sampai boleh mencoba login lagi (0 = tidak terkunci)
+function login_lock_remaining($username)
+{
+    try {
+        $row = db_one(
+            "SELECT COUNT(*) AS total, MIN(attempted_at) AS oldest FROM login_attempts WHERE ip = ? AND username = ? AND attempted_at > ?",
+            [client_ip(), $username, time() - LOGIN_WINDOW]
+        );
+    } catch (PDOException $e) {
+        // tabel belum dibuat (lihat migrations/003_login_attempts.sql): jangan blokir login
+        error_log("login_attempts unavailable: " . $e->getMessage());
+        return 0;
+    }
+    if ((int) $row['total'] < LOGIN_MAX_ATTEMPTS) return 0;
+    return max(1, (int) $row['oldest'] + LOGIN_WINDOW - time());
+}
+
+function record_login_failure($username)
+{
+    db_run("INSERT INTO login_attempts (ip, username, attempted_at) VALUES (?, ?, ?)", [client_ip(), $username, time()]);
+    db_run("DELETE FROM login_attempts WHERE attempted_at < ?", [time() - 86400]);
+}
+
+function clear_login_failures($username)
+{
+    db_run("DELETE FROM login_attempts WHERE ip = ? AND username = ?", [client_ip(), $username]);
 }
 
 // Hapus file gambar hanya jika valid (file lokal di img/ atau URL Vercel Blob)

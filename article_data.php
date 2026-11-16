@@ -211,7 +211,7 @@ $hasil = db_all("SELECT * FROM article ORDER BY tanggal DESC LIMIT $limit OFFSET
             echo '<li class="page-item disabled"><a class="page-link" href="#">First</a></li>';
             echo '<li class="page-item disabled"><a class="page-link" href="#"><span aria-hidden="true">&laquo;</span></a></li>';
         } else {
-            $link_prev = ($hlm > 1) ? $hlm - 1 : 1;
+            $link_prev = $hlm - 1;
             echo '<li class="page-item halaman" id="1"><a class="page-link" href="#">First</a></li>';
             echo '<li class="page-item halaman" id="' . $link_prev . '"><a class="page-link" href="#"><span aria-hidden="true">&laquo;</span></a></li>';
         }
