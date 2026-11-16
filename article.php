@@ -3,6 +3,7 @@ if (!defined('DAILYIN_ADMIN')) {
     http_response_code(403);
     exit;
 }
+require_once __DIR__ . '/article_fields.php';
 ?>
     <!-- Button trigger modal -->
     <button type="button" class="btn btn-secondary mb-2" data-bs-toggle="modal" data-bs-target="#modalTambah">
@@ -45,8 +46,9 @@ if (!defined('DAILYIN_ADMIN')) {
                                     </div>
                                 </div>
 
-                                <!-- Kolom Kanan: Sidebar (Caption & Gambar) -->
+                                <!-- Kolom Kanan: Sidebar (Status, Tag, Caption & Gambar) -->
                                 <div class="col-md-4 border-start">
+                                    <?php render_article_fields(); ?>
                                     <div class="mb-4">
                                         <div class="d-flex justify-content-between align-items-center mb-2">
                                             <label for="summaryResult" class="form-label small text-muted mb-0">CAPTION SOSMED</label>
@@ -248,6 +250,42 @@ if (!defined('DAILYIN_ADMIN')) {
             });
         });
 
+        // Saran tag dari AI (form tambah & edit)
+        $(document).on('click', '.btn-saran-tag', function() {
+            var btn = $(this);
+            var form = btn.closest('form');
+            var judul = form.find('input[name="judul"]').val();
+            var isiEl = form.find('textarea[name="isi"]');
+            var isi = isiEl.next('.note-editor').length ? $("<div/>").html(isiEl.summernote('code')).text() : isiEl.val();
+
+            if ($.trim(judul + ' ' + isi) === '') {
+                alert('Isi judul atau artikel terlebih dahulu!');
+                return;
+            }
+
+            var originalText = btn.html();
+            btn.prop('disabled', true).html('<span class="spinner-border spinner-border-sm"></span>');
+
+            $.ajax({
+                url: 'ai_helper.php',
+                type: 'POST',
+                contentType: 'application/json',
+                data: JSON.stringify({ text: isi || judul, title: judul, mode: 'generate_tags' }),
+                success: function(response) {
+                    if (response.result) {
+                        form.find('input[name="tags"]').val(response.result);
+                    } else if (response.error) {
+                        alert('AI Error: ' + response.error);
+                    }
+                    btn.prop('disabled', false).html(originalText);
+                },
+                error: function() {
+                    alert('Gagal menghubungi AI Helper.');
+                    btn.prop('disabled', false).html(originalText);
+                }
+            });
+        });
+
         // 2. Generate Summary di Edit Modal
         $(document).on('click', '.btn-ringkas-edit', function() {
             var btn = $(this);
@@ -310,6 +348,27 @@ if (isset($_POST['simpan'])) {
     $gambar = '';
     $nama_gambar = $_FILES['gambar']['name'] ?? '';
 
+    //status & jadwal terbit (datetime-local "2026-11-20T08:00", zona waktu Asia/Jakarta)
+    $status = ($_POST['status'] ?? '') === 'draft' ? 'draft' : 'published';
+    $published_at = null;
+    $published_input = trim($_POST['published_at'] ?? '');
+    if ($published_input !== '' && strtotime($published_input)) {
+        $published_at = date('Y-m-d H:i:s', strtotime($published_input));
+    }
+    $id = isset($_POST['id']) ? (int) $_POST['id'] : 0;
+    $lama = $id ? db_one("SELECT gambar, published_at FROM article WHERE id = ?", [$id]) : null;
+    if ($published_at === null) {
+        //kosong: pakai tanggal terbit lama, atau sekarang jika baru diterbitkan
+        $published_at = $lama['published_at'] ?? null;
+        if ($published_at === null && $status === 'published') {
+            $published_at = now_string();
+        }
+    }
+
+    //slug URL: dari isian, atau otomatis dari judul (selalu dibuat unik)
+    $slug_input = trim($_POST['slug'] ?? '');
+    $slug = unique_slug($slug_input !== '' ? $slug_input : $judul, $id);
+
     //jika ada file yang dikirim
     if ($nama_gambar != '') {
         //panggil function upload_foto untuk cek spesifikasi file yg dikirimkan user
@@ -328,12 +387,10 @@ if (isset($_POST['simpan'])) {
     }
 
     //cek apakah ada id yang dikirimkan dari form
-    if (isset($_POST['id'])) {
+    if ($id) {
         //jika ada id, lakukan update data dengan id tersebut
-        $id = (int) $_POST['id'];
-
         //nama gambar lama diambil dari database, bukan dari form (supaya tidak bisa dimanipulasi)
-        $gambar_lama = (string) db_value("SELECT gambar FROM article WHERE id = ?", [$id]);
+        $gambar_lama = (string) ($lama['gambar'] ?? '');
 
         if ($nama_gambar == '') {
             //jika tidak ganti gambar
@@ -346,13 +403,16 @@ if (isset($_POST['simpan'])) {
         $simpan = db_run("UPDATE article
                                 SET
                                 judul =?,
+                                slug = ?,
                                 isi =?,
                                 summary = ?,
                                 gambar = ?,
                                 tanggal = ?,
-                                username = ?
+                                username = ?,
+                                status = ?,
+                                published_at = ?
                                 $reset_ai
-                                WHERE id = ?", [$judul, $isi, $summary, $gambar, $tanggal, $username, $id]);
+                                WHERE id = ?", [$judul, $slug, $isi, $summary, $gambar, $tanggal, $username, $status, $published_at, $id]);
 
         //jika ganti gambar dan update berhasil, hapus gambar lama
         if ($simpan && $nama_gambar != '' && $gambar_lama != $gambar) {
@@ -360,8 +420,14 @@ if (isset($_POST['simpan'])) {
         }
     } else {
         //jika tidak ada id, lakukan insert data baru
-        $simpan = db_run("INSERT INTO article (judul,isi,summary,gambar,tanggal,username)
-                                VALUES (?,?,?,?,?,?)", [$judul, $isi, $summary, $gambar, $tanggal, $username]);
+        $simpan = db_run("INSERT INTO article (judul,slug,isi,summary,gambar,tanggal,username,status,published_at)
+                                VALUES (?,?,?,?,?,?,?,?,?)", [$judul, $slug, $isi, $summary, $gambar, $tanggal, $username, $status, $published_at]);
+        $id = $simpan ? (int) db_value("SELECT id FROM article WHERE slug = ?", [$slug]) : 0;
+    }
+
+    //simpan tag
+    if ($simpan && $id) {
+        save_article_tags($id, $_POST['tags'] ?? '');
     }
 
     if ($simpan) {

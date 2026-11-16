@@ -74,7 +74,7 @@ jobs:
 
       - name: Start PHP server
         run: |
-          php -S 127.0.0.1:8099 -t . > /tmp/php-server.log 2>&1 &
+          php -S 127.0.0.1:8099 -t . router.php > /tmp/php-server.log 2>&1 &
           for i in $(seq 1 20); do curl -s -o /dev/null http://127.0.0.1:8099/login.php && break; sleep 1; done
 
       - name: Run e2e tests

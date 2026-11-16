@@ -209,9 +209,10 @@ if ($mode === 'generate_summary') {
     $id = (int) ($data['id'] ?? 0);
     $cache = has_ai_summary_column();
 
-    $article = db_one("SELECT judul, isi" . ($cache ? ", ai_summary" : "") . " FROM article WHERE id = ?", [$id]);
+    $article = db_one("SELECT judul, isi, status, published_at" . ($cache ? ", ai_summary" : "") . " FROM article WHERE id = ?", [$id]);
 
-    if (!$article) {
+    // draft / terjadwal tidak boleh diringkas oleh pengunjung (isinya belum publik)
+    if (!$article || (!is_published($article) && !is_logged_in())) {
         json_out(['error' => 'Artikel tidak ditemukan'], 404);
     }
     if ($cache && !empty($article['ai_summary'])) {
@@ -326,8 +327,32 @@ FORMAT OUTPUT (HTML):
 JUDUL ARTIKEL: \"" . mb_substr($text, 0, 200) . "\"
 
 Mulai menulis artikel sekarang, pastikan isinya 100% nyambung dengan judul di atas:";
+} else if ($mode == 'generate_tags') {
+    $prompt = "Kamu adalah editor blog yang memberi tag pada artikel.
+
+Tugas: Berikan 3 sampai 5 tag yang paling relevan untuk artikel berikut.
+
+ATURAN KETAT:
+- Tag dalam Bahasa Indonesia (istilah teknis boleh bahasa Inggris, misalnya PHP, AI)
+- Setiap tag 1-3 kata, tanpa tanda pagar (#)
+- Tulis dalam SATU baris, dipisahkan koma
+- JANGAN ada penjelasan atau teks lain
+
+JUDUL ARTIKEL: {$title}
+
+ISI ARTIKEL (potongan):
+" . mb_substr($text, 0, 1500) . "
+
+Tag:";
 } else {
     json_out(['error' => 'Mode AI tidak dikenal'], 400);
 }
 
-json_out(ask_gemini($prompt, $mode, $apiKey, $models_to_try));
+$hasil = ask_gemini($prompt, $mode, $apiKey, $models_to_try);
+
+// rapikan saran tag: buang #, baris baru, duplikat (pakai aturan yang sama dengan penyimpanan tag)
+if ($mode == 'generate_tags' && isset($hasil['result'])) {
+    $hasil['result'] = implode(', ', parse_tags(str_replace(["\n", '#', '*'], [',', '', ''], $hasil['result'])));
+}
+
+json_out($hasil);

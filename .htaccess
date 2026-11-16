@@ -2,7 +2,7 @@
 Options -Indexes
 
 # Blokir file rahasia / internal: .env, .git, dump SQL, log, file config & helper yang tidak boleh dibuka langsung
-<FilesMatch "^(\.env.*|\.git.*|.*\.sql|.*\.log|.*\.md|config_ai\.php|env\.php|auth\.php|koneksi\.php|storage\.php|upload_foto\.php|dashboard\.php|article\.php|gallery\.php|password\.php)$">
+<FilesMatch "^(\.env.*|\.git.*|.*\.sql|.*\.log|.*\.md|config_ai\.php|env\.php|auth\.php|koneksi\.php|storage\.php|content\.php|router\.php|upload_foto\.php|dashboard\.php|article\.php|gallery\.php|password\.php)$">
     <IfModule mod_authz_core.c>
         Require all denied
     </IfModule>
@@ -16,6 +16,11 @@ Options -Indexes
     RewriteEngine On
     RewriteRule (^|/)\.git(/|$) - [F,L]
     RewriteRule ^(migrations|database|docker)/ - [F,L]
+
+    # URL cantik (/artikel/slug, /tag/slug, /sitemap.xml): selain file/folder yang ada, arahkan ke index.php
+    RewriteCond %{REQUEST_FILENAME} !-f
+    RewriteCond %{REQUEST_FILENAME} !-d
+    RewriteRule ^ index.php [L]
 </IfModule>
 
 # Header keamanan dasar

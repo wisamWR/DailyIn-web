@@ -5,12 +5,16 @@
 CREATE TABLE article (
   id SERIAL PRIMARY KEY,
   judul TEXT,
+  slug VARCHAR(200) UNIQUE,
   isi TEXT,
   gambar TEXT,
   summary TEXT,
   ai_summary TEXT,
   tanggal TIMESTAMP,
-  username VARCHAR(50)
+  username VARCHAR(50),
+  -- draft | published; published_at di masa depan = terjadwal
+  status VARCHAR(10) NOT NULL DEFAULT 'published',
+  published_at TIMESTAMP
 );
 
 CREATE TABLE gallery (
@@ -46,14 +50,34 @@ CREATE TABLE login_attempts (
 );
 CREATE INDEX login_attempts_lookup ON login_attempts (ip, username, attempted_at);
 
-INSERT INTO article (id, judul, isi, gambar, tanggal, username) VALUES
-(1, 'Perpustakaan Kampus', NULL, 'book.jpg', '2025-12-10 13:30:06', 'admin'),
-(2, 'Ruang Kelas', NULL, 'class.jpg', '2025-12-10 13:34:30', 'admin'),
-(3, 'Pemandangan', NULL, 'alaska.jpg', '2025-12-10 13:36:01', 'admin'),
-(4, 'ide', NULL, 'ideas.jpg', '2025-12-10 13:36:01', 'admin'),
-(5, 'Coding', 'kumpulan project dan pelatihan', 'coding.jpg', '2025-12-15 20:50:34', 'admin'),
-(6, 'Holiday Place', NULL, 'sf.jpg', '2025-12-10 13:36:01', 'admin'),
-(7, 'Memory', 'Kenangan yang akan terus di ingat sepanjang masa!!!', '20251215204343.jpg', '2025-12-15 20:43:43', 'admin');
+-- Tag artikel
+CREATE TABLE tag (
+  id SERIAL PRIMARY KEY,
+  name VARCHAR(50) NOT NULL,
+  slug VARCHAR(60) NOT NULL UNIQUE
+);
+CREATE TABLE article_tag (
+  article_id INTEGER NOT NULL REFERENCES article(id) ON DELETE CASCADE,
+  tag_id INTEGER NOT NULL REFERENCES tag(id) ON DELETE CASCADE,
+  PRIMARY KEY (article_id, tag_id)
+);
+CREATE INDEX article_tag_tag ON article_tag (tag_id);
+
+INSERT INTO article (id, judul, slug, isi, gambar, tanggal, username, status, published_at) VALUES
+(1, 'Perpustakaan Kampus', 'perpustakaan-kampus', NULL, 'book.jpg', '2025-12-10 13:30:06', 'admin', 'published', '2025-12-10 13:30:06'),
+(2, 'Ruang Kelas', 'ruang-kelas', NULL, 'class.jpg', '2025-12-10 13:34:30', 'admin', 'published', '2025-12-10 13:34:30'),
+(3, 'Pemandangan', 'pemandangan', NULL, 'alaska.jpg', '2025-12-10 13:36:01', 'admin', 'published', '2025-12-10 13:36:01'),
+(4, 'ide', 'ide', NULL, 'ideas.jpg', '2025-12-10 13:36:01', 'admin', 'published', '2025-12-10 13:36:01'),
+(5, 'Coding', 'coding', 'kumpulan project dan pelatihan', 'coding.jpg', '2025-12-15 20:50:34', 'admin', 'published', '2025-12-15 20:50:34'),
+(6, 'Holiday Place', 'holiday-place', NULL, 'sf.jpg', '2025-12-10 13:36:01', 'admin', 'published', '2025-12-10 13:36:01'),
+(7, 'Memory', 'memory', 'Kenangan yang akan terus di ingat sepanjang masa!!!', '20251215204343.jpg', '2025-12-15 20:43:43', 'admin', 'published', '2025-12-15 20:43:43');
+
+INSERT INTO tag (id, name, slug) VALUES
+(1, 'Kampus', 'kampus'),
+(2, 'Coding', 'coding'),
+(3, 'Liburan', 'liburan');
+
+INSERT INTO article_tag (article_id, tag_id) VALUES (1, 1), (2, 1), (5, 2), (3, 3), (6, 3);
 
 INSERT INTO gallery (id, judul, tanggal, gambar, username) VALUES
 (1, 'Holiday Place', '2025-12-31 17:26:42', 'sf.jpg', 'admin'),
@@ -70,3 +94,4 @@ INSERT INTO "user" (id, username, password, foto) VALUES
 SELECT setval('article_id_seq', (SELECT MAX(id) FROM article));
 SELECT setval('gallery_id_seq', (SELECT MAX(id) FROM gallery));
 SELECT setval('user_id_seq', (SELECT MAX(id) FROM "user"));
+SELECT setval('tag_id_seq', (SELECT MAX(id) FROM tag));

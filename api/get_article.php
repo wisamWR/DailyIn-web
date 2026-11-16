@@ -16,7 +16,12 @@ if ($id <= 0) {
     exit;
 }
 
-$article = db_one("SELECT id, judul, isi, gambar, tanggal FROM article WHERE id = ?", [$id]);
+$article = db_one("SELECT id, judul, slug, isi, gambar, tanggal, status, published_at FROM article WHERE id = ?", [$id]);
+
+// draft / terjadwal hanya untuk admin
+if ($article && !is_published($article) && !is_logged_in()) {
+    $article = null;
+}
 
 if ($article) {
     echo json_encode([
@@ -28,6 +33,7 @@ if ($article) {
         // versi teks biasa (dipakai sebelumnya, tetap ada supaya kompatibel)
         'isi_artikel' => strip_tags($article['isi'] ?? ''),
         'gambar' => image_url($article['gambar']),
+        'url' => article_url($article),
         'tanggal' => $article['tanggal'],
     ]);
 } else {

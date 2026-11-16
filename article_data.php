@@ -4,6 +4,11 @@ require_once "auth.php";
 //endpoint ini hanya untuk admin
 require_login_json();
 
+require_once __DIR__ . '/article_fields.php';
+
+//artikel lama (sebelum migrasi 004) diberi slug otomatis
+backfill_slugs();
+
 $limit = 3;
 $total_records = (int) db_value("SELECT COUNT(*) FROM article");
 $jumlah_page = max(1, (int) ceil($total_records / $limit));
@@ -15,6 +20,7 @@ $limit_start = ($hlm - 1) * $limit;
 $no = $limit_start + 1;
 
 $hasil = db_all("SELECT * FROM article ORDER BY tanggal DESC LIMIT $limit OFFSET $limit_start");
+$article_tags = tags_for_articles(array_column($hasil, 'id'));
 ?>
 
 <!-- Table Article -->
@@ -36,12 +42,24 @@ $hasil = db_all("SELECT * FROM article ORDER BY tanggal DESC LIMIT $limit OFFSET
                 <td><?= $no++ ?></td>
                 <td>
                     <strong><?= e($row["judul"]) ?></strong>
+                    <br>
+                    <?php if (($row['status'] ?? 'published') === 'draft') : ?>
+                        <span class="badge text-bg-secondary">Draft</span>
+                    <?php elseif (!is_published($row)) : ?>
+                        <span class="badge text-bg-warning">Terjadwal <?= e(display_date($row)) ?></span>
+                    <?php else : ?>
+                        <span class="badge text-bg-success">Terbit</span>
+                    <?php endif; ?>
+                    <a href="<?= e(article_url($row)) ?>" target="_blank" class="small ms-1"><i class="bi bi-box-arrow-up-right"></i> Lihat</a>
                     <br>pada : <?= e($row["tanggal"]) ?>
                     <br>oleh : <?= e($row["username"]) ?>
+                    <?php foreach ($article_tags[(int) $row['id']] ?? [] as $tag) : ?>
+                        <span class="badge text-bg-light border">#<?= e($tag['name']) ?></span>
+                    <?php endforeach; ?>
                 </td>
                 <td>
                     <?php
-                    $isi = $row["isi"];
+                    $isi = $row["isi"] ?? '';
                     $clean_isi = strip_tags($isi); // Bersihkan tag HTML untuk tampilan pendek
                     
                     if (mb_strlen($clean_isi) > 150) {
@@ -123,8 +141,9 @@ $hasil = db_all("SELECT * FROM article ORDER BY tanggal DESC LIMIT $limit OFFSET
                                                 </div>
                                             </div>
 
-                                            <!-- Kolom Kanan: Sidebar (Caption & Gambar) -->
+                                            <!-- Kolom Kanan: Sidebar (Status, Tag, Caption & Gambar) -->
                                             <div class="col-md-4 border-start">
+                                                <?php render_article_fields($row, tags_string($article_tags[(int) $row['id']] ?? [])); ?>
                                                 <div class="mb-4">
                                                     <div class="d-flex justify-content-between align-items-center mb-2">
                                                         <label for="summaryResult" class="form-label small text-muted mb-0">CAPTION SOSMED</label>

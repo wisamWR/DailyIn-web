@@ -39,6 +39,7 @@ ok()    { echo "PASS  $1"; PASS=$((PASS+1)); }
 bad()   { echo "FAIL  $1  -> $2"; FAIL=$((FAIL+1)); }
 check() { if [ "$2" = "$3" ]; then ok "$1"; else bad "$1" "got [$2] want [$3]"; fi; }
 code()  { curl -s -o /dev/null -w '%{http_code}' "$@"; }
+some()  { if [ "${2:-0}" -gt 0 ] 2>/dev/null; then ok "$1"; else bad "$1" "got [${2:-}] want [>0]"; fi; }
 token() { curl -s -b "$J" -c "$J" "$1" | grep -o 'name="csrf_token" value="[a-f0-9]*"' | head -1 | sed 's/.*value="//;s/"//'; }
 
 echo "== Reset test DB ($DRIVER) =="
@@ -92,6 +93,8 @@ check "LFI page falls back to dashboard" "$(curl -s -b "$J" "$B/admin.php?page=.
 check "article_data hlm=abc ok" "$(code -b "$J" -d 'hlm=abc' "$B/article_data.php")" "200"
 check "article_data hlm=-5 ok" "$(curl -s -b "$J" -d 'hlm=-5' "$B/article_data.php" | grep -c 'Total article')" "1"
 check "article_data hlm=999 ok" "$(curl -s -b "$J" -d 'hlm=999' "$B/article_data.php" | grep -c '<tr>')" "2"
+check "no PHP warnings in admin table" "$(curl -s -b "$J" -d 'hlm=1' "$B/article_data.php" | grep -c -E '(Deprecated|Warning|Notice|Fatal error)(</b>)?:')" "0"
+check "no PHP warnings on public pages" "$({ curl -s "$B/"; curl -s "$B/artikel/coding"; curl -s "$B/sitemap.xml"; } | grep -c -E '(Deprecated|Warning|Notice|Fatal error)(</b>)?:')" "0"
 check "edit modal textarea uses summernote class" "$(curl -s -b "$J" -d 'hlm=1' "$B/article_data.php" | grep -c 'form-control summernote')" "3"
 T=$(token "$B/admin.php?page=article")
 check "delete without csrf rejected" "$(curl -s -b "$J" -d 'hapus=hapus&id=7' "$B/admin.php?page=article" | grep -c 'CSRF token salah')" "1"
@@ -151,6 +154,73 @@ check "gallery edit only one row" "$(SQL "SELECT COUNT(*) FROM gallery WHERE jud
 curl -s -o /dev/null -b "$J" -d "csrf_token=$TG&hapus=Hapus&id=$GID&gambar=../canary.txt" "$B/admin.php?page=gallery"
 check "gallery delete works" "$(SQL "SELECT COUNT(*) FROM gallery WHERE id=$GID")" "0"
 [ -f "$APP/canary.txt" ] && ok "gallery traversal blocked" || bad "gallery traversal blocked" "canary gone"
+
+echo "== Fase 3: halaman artikel, tag, pencarian, SEO =="
+HOME_HTML=$(curl -s "$B/")
+some "home links to slug url" "$(echo "$HOME_HTML" | grep -c 'href="/artikel/coding"')"
+ART=$(curl -s "$B/artikel/coding")
+check "article page 200" "$(code "$B/artikel/coding")" "200"
+check "article og:title" "$(echo "$ART" | grep -c '<meta property="og:title" content="Coding"')" "1"
+check "article canonical" "$(echo "$ART" | grep -c 'rel="canonical" href="http[^"]*/artikel/coding"')" "1"
+check "article json-ld" "$(echo "$ART" | grep -c '"@type":"BlogPosting"')" "1"
+check "article shows tag" "$(echo "$ART" | grep -c 'href="/tag/coding#article"')" "1"
+check "unknown article 404" "$(code "$B/artikel/tidak-ada-sama-sekali")" "404"
+check "old id url 301" "$(code "$B/artikel.php?id=5")" "301"
+check "old id url -> slug" "$(curl -s -o /dev/null -w '%{redirect_url}' "$B/artikel.php?id=5" | grep -c '/artikel/coding$')" "1"
+TAGP=$(curl -s "$B/tag/kampus")
+check "tag page 200" "$(code "$B/tag/kampus")" "200"
+some "tag page lists tagged" "$(echo "$TAGP" | grep -c 'href="/artikel/ruang-kelas"')"
+check "tag page excludes others" "$(echo "$TAGP" | grep -c 'href="/artikel/coding"')" "0"
+check "unknown tag 404" "$(code "$B/tag/tidak-ada")" "404"
+SRCH=$(curl -s "$B/?q=kenangan")
+some "search finds article" "$(echo "$SRCH" | grep -c 'href="/artikel/memory"')"
+check "search excludes others" "$(echo "$SRCH" | grep -c 'href="/artikel/coding"')" "0"
+check "search page noindex" "$(echo "$SRCH" | grep -c 'name="robots" content="noindex')" "1"
+check "search % is literal" "$(curl -s "$B/?q=%25" | grep -c 'Belum ada artikel yang cocok')" "1"
+check "search escapes query" "$(curl -s "$B/?q=%3Cscript%3Ex%3C%2Fscript%3E" | grep -c '<script>x</script>')" "0"
+check "sitemap 200" "$(code "$B/sitemap.xml")" "200"
+check "sitemap has article" "$(curl -s "$B/sitemap.xml" | grep -c '/artikel/coding</loc>')" "1"
+check "robots has sitemap" "$(curl -s "$B/robots.txt" | grep -c '^Sitemap: http.*/sitemap.xml')" "1"
+
+TA=$(token "$B/admin.php?page=article")
+# draft dengan tag (termasuk tag berisi HTML) dan slug buatan sendiri yang berbahaya
+curl -s -o /dev/null -b "$J" -c "$J" -F "csrf_token=$TA" -F 'simpan=1' --form-string 'judul=Draft Rahasia' --form-string 'isi=<p>isi rahasia draft</p>' \
+  -F 'status=draft' --form-string 'tags=PHP, <img src=x onerror=alert(1)>, Rahasia' --form-string 'slug=../../Etc <script>' "$B/admin.php?page=article"
+DID=$(SQL "SELECT id FROM article WHERE judul='Draft Rahasia'")
+DSLUG=$(SQL "SELECT slug FROM article WHERE id=$DID")
+check "custom slug sanitized" "$DSLUG" "etc-script"
+check "draft has 3 tags" "$(SQL "SELECT COUNT(*) FROM article_tag WHERE article_id=$DID")" "3"
+check "draft hidden from guest" "$(code "$B/artikel/$DSLUG")" "404"
+check "draft not on home" "$(curl -s "$B/" | grep -c 'Draft Rahasia')" "0"
+check "draft not in sitemap" "$(curl -s "$B/sitemap.xml" | grep -c "$DSLUG")" "0"
+check "draft hidden in api" "$(code "$B/api/get_article.php?id=$DID")" "404"
+check "draft hidden from ai summary" "$(code -H 'Content-Type: application/json' -d "{\"mode\":\"generate_summary\",\"id\":$DID}" "$B/ai_helper.php")" "404"
+check "draft tag not public" "$(curl -s "$B/" | grep -c '#Rahasia')" "0"
+check "admin can preview draft" "$(curl -s -b "$J" "$B/artikel/$DSLUG" | grep -c 'Pratinjau admin')" "1"
+check "preview is noindex" "$(curl -s -b "$J" "$B/artikel/$DSLUG" | grep -c 'content="noindex, nofollow"')" "1"
+check "tag html escaped in admin" "$(curl -s -b "$J" -d 'hlm=1' "$B/article_data.php" | grep -c '<img src=x onerror')" "0"
+
+# terbitkan draft lewat edit -> terlihat publik, tag ikut tampil (tetap ter-escape)
+curl -s -o /dev/null -b "$J" -c "$J" -F "csrf_token=$TA" -F 'simpan=1' -F "id=$DID" --form-string 'judul=Draft Rahasia' --form-string 'isi=<p>isi rahasia draft</p>' \
+  -F 'status=published' --form-string 'tags=PHP, <img src=x onerror=alert(1)>' --form-string "slug=$DSLUG" "$B/admin.php?page=article"
+check "published after edit" "$(code "$B/artikel/$DSLUG")" "200"
+check "tags updated on edit" "$(SQL "SELECT COUNT(*) FROM article_tag WHERE article_id=$DID")" "2"
+check "unused tag removed" "$(SQL "SELECT COUNT(*) FROM tag WHERE slug='rahasia'")" "0"
+check "tag html escaped on home" "$(curl -s "$B/" | grep -c '<img src=x onerror')" "0"
+check "published_at set" "$(SQL "SELECT CASE WHEN published_at IS NOT NULL THEN 1 ELSE 0 END FROM article WHERE id=$DID")" "1"
+
+# terjadwal di masa depan
+curl -s -o /dev/null -b "$J" -c "$J" -F "csrf_token=$TA" -F 'simpan=1' --form-string 'judul=Coding' --form-string 'isi=<p>nanti</p>' \
+  -F 'status=published' -F 'published_at=2099-01-01T08:00' "$B/admin.php?page=article"
+SID=$(SQL "SELECT MAX(id) FROM article WHERE judul='Coding'")
+check "duplicate title gets unique slug" "$(SQL "SELECT slug FROM article WHERE id=$SID")" "coding-2"
+check "scheduled hidden from guest" "$(code "$B/artikel/coding-2")" "404"
+check "scheduled preview label" "$(curl -s -b "$J" "$B/artikel/coding-2" | grep -c 'terjadwal')" "1"
+check "admin table shows scheduled badge" "$(curl -s -b "$J" -d 'hlm=1' "$B/article_data.php" | grep -c 'Terjadwal')" "1"
+TS=$(token "$B/admin.php?page=article")
+curl -s -o /dev/null -b "$J" -c "$J" -d "csrf_token=$TS&hapus=hapus&id=$SID" "$B/admin.php?page=article"
+curl -s -o /dev/null -b "$J" -c "$J" -d "csrf_token=$TS&hapus=hapus&id=$DID" "$B/admin.php?page=article"
+check "article delete cascades tags" "$(SQL "SELECT COUNT(*) FROM article_tag WHERE article_id IN ($SID, $DID)")" "0"
 
 echo "== AI admin mode =="
 check "ai admin without csrf header 403" "$(code -b "$J" -H 'Content-Type: application/json' -d '{"mode":"generate_caption","text":"x"}' "$B/ai_helper.php")" "403"
