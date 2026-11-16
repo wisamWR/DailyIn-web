@@ -51,6 +51,7 @@ $article_tags = tags_for_articles(array_column($hasil, 'id'));
                         <span class="badge text-bg-success">Terbit</span>
                     <?php endif; ?>
                     <a href="<?= e(article_url($row)) ?>" target="_blank" class="small ms-1"><i class="bi bi-box-arrow-up-right"></i> Lihat</a>
+                    <br><small class="text-muted"><i class="bi bi-eye"></i> <?= (int) ($row['views'] ?? 0) ?>x dibaca<?= mood_label($row['mood'] ?? null) !== '' ? ' &middot; ' . e(mood_label($row['mood'])) : '' ?></small>
                     <br>pada : <?= e($row["tanggal"]) ?>
                     <br>oleh : <?= e($row["username"]) ?>
                     <?php foreach ($article_tags[(int) $row['id']] ?? [] as $tag) : ?>

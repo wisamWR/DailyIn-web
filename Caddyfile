@@ -12,7 +12,7 @@
 
 	# Blokir file rahasia/internal: dotfile (.env, .git), dump SQL, dokumentasi,
 	# file helper yang hanya untuk di-include, dan script di folder upload
-	@blocked path_regexp ^/(\.|migrations/|database/|docker/|img/.*\.php|.*\.(sql|md)$|(auth|env|koneksi|storage|content|router|upload_foto|dashboard|article|gallery|password|config_ai)\.php$)
+	@blocked path_regexp ^/(\.|migrations/|database/|docker/|img/.*\.php|.*\.(sql|md)$|(auth|env|koneksi|storage|content|journal|router|upload_foto|dashboard|article|gallery|password|config_ai)\.php$)
 	handle @blocked {
 		respond 404
 	}

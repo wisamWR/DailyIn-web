@@ -19,16 +19,24 @@ Website ini terintegrasi langsung dengan Google Gemini API untuk membantu produk
 *   **📱 Auto-Caption**: Secara otomatis membuat caption Instagram/Twitter yang *catchy* dan relevan dari isi artikel Anda.
 *   **📝 Smart Summary**: Pengunjung malas membaca panjang? Klik fitur "Ringkasan", AI akan menyajikan poin-poin penting artikel dalam sekejap.
 *   **🏷️ Saran Tag**: AI menyarankan 3-5 tag yang relevan dari judul dan isi artikel.
+*   **😊 Deteksi Mood**: AI menebak suasana hati dari isi tulisan untuk mengisi mood entri jurnal.
 
 ### 🛠️ 2. Manajemen Konten (CMS)
 *   **CRUD Artikel**: Tambah, Edit (dengan Summernote WYSIWYG Editor), Hapus artikel.
 *   **Halaman Artikel + SEO**: Setiap artikel punya URL sendiri (`/artikel/judul-artikel`) dengan meta Open Graph/Twitter, canonical, JSON-LD, tombol bagikan, dan artikel terkait. Tersedia `/sitemap.xml` dan `/robots.txt`.
 *   **Tag & Pencarian**: Banyak tag per artikel, halaman `/tag/nama-tag`, dan pencarian judul/isi di beranda.
 *   **Draft & Jadwal Terbit**: Artikel bisa disimpan sebagai draft atau dijadwalkan terbit di waktu tertentu. Admin tetap bisa melihat pratinjaunya.
+
+### 📔 3. Jurnal & Statistik (Dashboard)
+*   **Mood per entri**: 😊 Senang, 🔥 Semangat, 😐 Biasa, 😴 Lelah, 😢 Sedih, 😟 Cemas, 😠 Marah, plus grafik sebaran mood 30 hari.
+*   **Streak menulis**: jumlah hari berturut-turut menulis dan streak terpanjang.
+*   **Kalender menulis**: heatmap aktivitas 26 minggu (dengan tooltip dan tampilan tabel).
+*   **Hari ini di tahun lalu**: entri dari tanggal yang sama di tahun-tahun sebelumnya.
+*   **Statistik**: jumlah dibaca per artikel (sekali per sesi, admin & bot tidak dihitung), artikel terpopuler, dan pemakaian AI per fitur (berhasil / dari cache).
 *   **Manajemen Galeri**: Upload foto kegiatan dengan manajemen file yang rapi.
 *   **Dashboard Admin**: Tampilan admin yang bersih, modern, dan **Mobile Responsive** (aman dibuka di HP).
 
-### 🔒 3. Keamanan & Konfigurasi
+### 🔒 4. Keamanan & Konfigurasi
 *   **Environment Variables (.env)**: Kredensial database dan API Key disimpan di file `.env` (tidak ikut di-commit, akses web diblokir lewat `.htaccess`).
 *   **Login System**: Password di-hash dengan `password_hash()` (bcrypt), session cookie `HttpOnly` + `SameSite`, session ID diganti setelah login. Password md5 lama otomatis di-upgrade saat login.
 *   **CSRF Protection**: Semua form dan request AJAX admin memakai CSRF token.
@@ -59,7 +67,7 @@ Ikuti langkah ini untuk menjalankan project di komputer lokal (XAMPP/Laragon):
 3.  Import file `webdailyjournal.sql`.
 
 > ℹ️ **Sudah punya database lama?** Jalankan file di folder `migrations/` secara berurutan (backup dulu), cukup yang belum pernah dijalankan:
-> `001_hardening.sql` (utf8mb4 + cache ringkasan AI), `002_sessions.sql` (opsional), `003_login_attempts.sql` (batas percobaan login), `004_content.sql` (slug, draft/jadwal terbit, tag). Slug artikel lama diisi otomatis saat membuka halaman Article di admin.
+> `001_hardening.sql` (utf8mb4 + cache ringkasan AI), `002_sessions.sql` (opsional), `003_login_attempts.sql` (batas percobaan login), `004_content.sql` (slug, draft/jadwal terbit, tag), `005_journal.sql` (mood, jumlah dibaca, catatan pemakaian AI). Slug artikel lama diisi otomatis saat membuka halaman Article di admin.
 
 ### 2. Konfigurasi Environment (.env)
 1.  Copy file `.env.example` menjadi `.env`.
@@ -144,6 +152,7 @@ DailyIn-web/
 ├── 📄 password.php      # Ganti Password admin
 ├── 📄 artikel.php       # Halaman detail artikel (/artikel/slug) + meta SEO
 ├── 📄 content.php       # Helper slug, URL, status terbit, tag
+├── 📄 journal.php       # Mood, streak, kalender, statistik view & AI
 ├── 📄 sitemap.php       # /sitemap.xml (robots.php untuk /robots.txt)
 ├── 📄 router.php        # Router untuk `php -S` (development & CI)
 ├── 📂 tests/            # Tes end-to-end (dipakai GitHub Actions)

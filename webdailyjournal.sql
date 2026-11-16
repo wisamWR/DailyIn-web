@@ -38,7 +38,9 @@ CREATE TABLE `article` (
   `tanggal` datetime DEFAULT NULL,
   `username` varchar(50) DEFAULT NULL,
   `status` varchar(10) NOT NULL DEFAULT 'published',
-  `published_at` datetime DEFAULT NULL
+  `published_at` datetime DEFAULT NULL,
+  `mood` varchar(20) DEFAULT NULL,
+  `views` int(11) NOT NULL DEFAULT 0
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 --
@@ -186,6 +188,16 @@ INSERT INTO `tag` (`id`, `name`, `slug`) VALUES
 (1, 'Kampus', 'kampus'),
 (2, 'Coding', 'coding'),
 (3, 'Liburan', 'liburan');
+
+CREATE TABLE `ai_usage` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `mode` varchar(30) NOT NULL,
+  `model` varchar(60) NOT NULL,
+  `success` tinyint(1) NOT NULL,
+  `created_at` datetime NOT NULL,
+  PRIMARY KEY (`id`),
+  KEY `ai_usage_created` (`created_at`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 INSERT INTO `article_tag` (`article_id`, `tag_id`) VALUES (1, 1), (2, 1), (5, 2), (3, 3), (6, 3);
 

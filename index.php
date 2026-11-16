@@ -249,7 +249,12 @@ $canonical = site_url($current_tag ? 'tag/' . $current_tag['slug'] : '');
                 <?php endforeach; ?>
               </div>
               <div class="card-footer d-flex justify-content-between align-items-center">
-                <small class="text-body-secondary"><?= e(display_date($row)) ?></small>
+                <small class="text-body-secondary">
+                  <?= e(display_date($row)) ?>
+                  <?php if (isset(MOODS[$row['mood'] ?? ''])) : ?>
+                    <span title="Mood: <?= e(MOODS[$row['mood']][1]) ?>" aria-label="Mood: <?= e(MOODS[$row['mood']][1]) ?>"><?= MOODS[$row['mood']][0] ?></span>
+                  <?php endif; ?>
+                </small>
                 <a href="<?= e(article_url($row)) ?>" class="btn btn-primary btn-sm">Baca Selengkapnya</a>
               </div>
             </div>

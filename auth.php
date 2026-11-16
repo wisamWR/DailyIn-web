@@ -4,6 +4,7 @@
 require_once __DIR__ . '/koneksi.php';
 require_once __DIR__ . '/storage.php';
 require_once __DIR__ . '/content.php';
+require_once __DIR__ . '/journal.php';
 
 // Session disimpan di database (SESSION_DRIVER=database). Wajib di Vercel karena
 // tiap instance server punya folder sendiri, jadi session berbasis file akan hilang.

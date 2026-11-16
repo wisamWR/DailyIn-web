@@ -216,6 +216,7 @@ if ($mode === 'generate_summary') {
         json_out(['error' => 'Artikel tidak ditemukan'], 404);
     }
     if ($cache && !empty($article['ai_summary'])) {
+        log_ai_usage($mode, 'cache', true);
         json_out(['result' => $article['ai_summary'], 'cached' => true]);
     }
 
@@ -245,6 +246,7 @@ Isi: " . mb_substr($text, 0, 1000) . "...
 Buatkan ringkasan dalam format bullet points:";
 
     $hasil = ask_gemini($prompt, $mode, $apiKey, $models_to_try);
+    log_ai_usage($mode, $hasil['model_used'] ?? 'none', isset($hasil['result']));
 
     if (isset($hasil['result']) && $cache) {
         db_run("UPDATE article SET ai_summary = ? WHERE id = ?", [$hasil['result'], $id]);
@@ -344,6 +346,24 @@ ISI ARTIKEL (potongan):
 " . mb_substr($text, 0, 1500) . "
 
 Tag:";
+} else if ($mode == 'generate_mood') {
+    $pilihan = implode(', ', array_keys(MOODS));
+    $prompt = "Kamu membaca entri jurnal harian dan menebak suasana hati penulisnya.
+
+Tugas: Pilih SATU mood yang paling menggambarkan perasaan penulis dalam tulisan berikut.
+
+PILIHAN (tulis persis salah satu kata ini, huruf kecil): {$pilihan}
+
+ATURAN KETAT:
+- Jawab hanya dengan satu kata dari pilihan di atas
+- JANGAN ada penjelasan atau tanda baca
+
+JUDUL: {$title}
+
+TULISAN (potongan):
+" . mb_substr($text, 0, 1500) . "
+
+Mood:";
 } else {
     json_out(['error' => 'Mode AI tidak dikenal'], 400);
 }
@@ -355,4 +375,17 @@ if ($mode == 'generate_tags' && isset($hasil['result'])) {
     $hasil['result'] = implode(', ', parse_tags(str_replace(["\n", '#', '*'], [',', '', ''], $hasil['result'])));
 }
 
+// mood: ambil kata pilihan pertama yang muncul di jawaban AI
+if ($mode == 'generate_mood' && isset($hasil['result'])) {
+    $jawaban = mb_strtolower($hasil['result'], 'UTF-8');
+    $ketemu = null;
+    foreach (array_keys(MOODS) as $key) {
+        $pos = strpos($jawaban, $key);
+        if ($pos !== false && ($ketemu === null || $pos < $ketemu[1])) $ketemu = [$key, $pos];
+    }
+    $hasil = $ketemu ? ['result' => $ketemu[0], 'label' => mood_label($ketemu[0]), 'model_used' => $hasil['model_used']]
+                     : ['error' => 'AI tidak bisa menentukan mood dari tulisan ini.'];
+}
+
+log_ai_usage($mode, $hasil['model_used'] ?? 'none', isset($hasil['result']));
 json_out($hasil);
