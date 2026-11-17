@@ -30,26 +30,31 @@ SET time_zone = "+00:00";
 CREATE TABLE `article` (
   `id` int(11) NOT NULL,
   `judul` text DEFAULT NULL,
+  `slug` varchar(200) DEFAULT NULL,
   `isi` mediumtext DEFAULT NULL,
   `gambar` text DEFAULT NULL,
   `summary` text DEFAULT NULL,
   `ai_summary` text DEFAULT NULL,
   `tanggal` datetime DEFAULT NULL,
-  `username` varchar(50) DEFAULT NULL
+  `username` varchar(50) DEFAULT NULL,
+  `status` varchar(10) NOT NULL DEFAULT 'published',
+  `published_at` datetime DEFAULT NULL,
+  `mood` varchar(20) DEFAULT NULL,
+  `views` int(11) NOT NULL DEFAULT 0
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 --
 -- Dumping data for table `article`
 --
 
-INSERT INTO `article` (`id`, `judul`, `isi`, `gambar`, `tanggal`, `username`) VALUES
-(1, 'Perpustakaan Kampus', NULL, 'book.jpg', '2025-12-10 13:30:06', 'admin'),
-(2, 'Ruang Kelas', NULL, 'class.jpg', '2025-12-10 13:34:30', 'admin'),
-(3, 'Pemandangan', NULL, 'alaska.jpg', '2025-12-10 13:36:01', 'admin'),
-(4, 'ide', NULL, 'ideas.jpg', '2025-12-10 13:36:01', 'admin'),
-(5, 'Coding', 'kumpulan project dan pelatihan', 'coding.jpg', '2025-12-15 20:50:34', 'admin'),
-(6, 'Holiday Place', NULL, 'sf.jpg', '2025-12-10 13:36:01', 'admin'),
-(7, 'Memory', 'Kenangan yang akan terus di ingat sepanjang masa!!!', '20251215204343.jpg', '2025-12-15 20:43:43', 'admin');
+INSERT INTO `article` (`id`, `judul`, `slug`, `isi`, `gambar`, `tanggal`, `username`, `status`, `published_at`) VALUES
+(1, 'Perpustakaan Kampus', 'perpustakaan-kampus', NULL, 'book.jpg', '2025-12-10 13:30:06', 'admin', 'published', '2025-12-10 13:30:06'),
+(2, 'Ruang Kelas', 'ruang-kelas', NULL, 'class.jpg', '2025-12-10 13:34:30', 'admin', 'published', '2025-12-10 13:34:30'),
+(3, 'Pemandangan', 'pemandangan', NULL, 'alaska.jpg', '2025-12-10 13:36:01', 'admin', 'published', '2025-12-10 13:36:01'),
+(4, 'ide', 'ide', NULL, 'ideas.jpg', '2025-12-10 13:36:01', 'admin', 'published', '2025-12-10 13:36:01'),
+(5, 'Coding', 'coding', 'kumpulan project dan pelatihan', 'coding.jpg', '2025-12-15 20:50:34', 'admin', 'published', '2025-12-15 20:50:34'),
+(6, 'Holiday Place', 'holiday-place', NULL, 'sf.jpg', '2025-12-10 13:36:01', 'admin', 'published', '2025-12-10 13:36:01'),
+(7, 'Memory', 'memory', 'Kenangan yang akan terus di ingat sepanjang masa!!!', '20251215204343.jpg', '2025-12-15 20:43:43', 'admin', 'published', '2025-12-15 20:43:43');
 
 -- --------------------------------------------------------
 
@@ -97,6 +102,21 @@ INSERT INTO `user` (`id`, `username`, `password`, `foto`) VALUES
 (1, 'admin', '$2y$12$vM1ESMjsvcWeeB/HL/hUceAFpPghH2K9fGPbPKysDzSDzazxNcpGq', '');
 
 --
+-- Table structure for table `login_attempts` (batas percobaan login)
+--
+
+CREATE TABLE `login_attempts` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `ip` varchar(64) NOT NULL,
+  `username` varchar(50) NOT NULL,
+  `attempted_at` int(11) NOT NULL,
+  PRIMARY KEY (`id`),
+  KEY `login_attempts_lookup` (`ip`,`username`,`attempted_at`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- --------------------------------------------------------
+
+--
 -- Indexes for dumped tables
 --
 
@@ -104,7 +124,8 @@ INSERT INTO `user` (`id`, `username`, `password`, `foto`) VALUES
 -- Indexes for table `article`
 --
 ALTER TABLE `article`
-  ADD PRIMARY KEY (`id`);
+  ADD PRIMARY KEY (`id`),
+  ADD UNIQUE KEY `article_slug` (`slug`);
 
 --
 -- Indexes for table `gallery`
@@ -140,6 +161,46 @@ ALTER TABLE `gallery`
 --
 ALTER TABLE `user`
   MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=2;
+-- --------------------------------------------------------
+
+--
+-- Tag artikel
+--
+
+CREATE TABLE `tag` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `name` varchar(50) NOT NULL,
+  `slug` varchar(60) NOT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `tag_slug` (`slug`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+CREATE TABLE `article_tag` (
+  `article_id` int(11) NOT NULL,
+  `tag_id` int(11) NOT NULL,
+  PRIMARY KEY (`article_id`, `tag_id`),
+  KEY `article_tag_tag` (`tag_id`),
+  CONSTRAINT `article_tag_article_fk` FOREIGN KEY (`article_id`) REFERENCES `article` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `article_tag_tag_fk` FOREIGN KEY (`tag_id`) REFERENCES `tag` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+INSERT INTO `tag` (`id`, `name`, `slug`) VALUES
+(1, 'Kampus', 'kampus'),
+(2, 'Coding', 'coding'),
+(3, 'Liburan', 'liburan');
+
+CREATE TABLE `ai_usage` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `mode` varchar(30) NOT NULL,
+  `model` varchar(60) NOT NULL,
+  `success` tinyint(1) NOT NULL,
+  `created_at` datetime NOT NULL,
+  PRIMARY KEY (`id`),
+  KEY `ai_usage_created` (`created_at`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+INSERT INTO `article_tag` (`article_id`, `tag_id`) VALUES (1, 1), (2, 1), (5, 2), (3, 3), (6, 3);
+
 COMMIT;
 
 /*!40101 SET CHARACTER_SET_CLIENT=@OLD_CHARACTER_SET_CLIENT */;

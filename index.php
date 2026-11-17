@@ -1,6 +1,46 @@
 <?php
+// Front controller sederhana: web server mengarahkan URL yang tidak dikenal ke index.php.
+//   /                -> beranda (bisa ?q= untuk pencarian)
+//   /artikel/{slug}  -> halaman detail artikel
+//   /tag/{slug}      -> beranda difilter per tag
+//   /sitemap.xml, /robots.txt
 require_once 'auth.php';
-include 'koneksi.php';
+
+$request_path = rawurldecode(parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH) ?: '/');
+$route = strpos(rtrim($request_path, '/') . '/', base_path()) === 0
+  ? trim((string) substr($request_path, strlen(base_path())), '/')
+  : null;
+
+$current_tag = null;
+if ($route === '' || $route === 'index.php') {
+  // beranda
+} elseif ($route !== null && preg_match('#^artikel/([a-z0-9-]{1,200})$#', $route, $m)) {
+  $article_slug = $m[1];
+  require __DIR__ . '/artikel.php';
+  exit;
+} elseif ($route !== null && preg_match('#^tag/([a-z0-9-]{1,60})$#', $route, $m)) {
+  $current_tag = db_one("SELECT name, slug FROM tag WHERE slug = ?", [$m[1]]);
+  if (!$current_tag) {
+    require __DIR__ . '/404.php';
+    exit;
+  }
+} elseif ($route === 'sitemap.xml') {
+  require __DIR__ . '/sitemap.php';
+  exit;
+} elseif ($route === 'robots.txt') {
+  require __DIR__ . '/robots.php';
+  exit;
+} else {
+  require __DIR__ . '/404.php';
+  exit;
+}
+
+// pencarian (maks 100 karakter)
+$search = mb_substr(trim((string) ($_GET['q'] ?? '')), 0, 100);
+
+$page_title = $current_tag ? 'Tag: ' . $current_tag['name'] . ' | DailyIn' : ($search !== '' ? 'Cari: ' . $search . ' | DailyIn' : 'DailyIn - Smart Daily Journal');
+$page_description = 'DailyIn: jurnal harian dan artikel seputar kampus, coding, dan keseharian, dibantu AI.';
+$canonical = site_url($current_tag ? 'tag/' . $current_tag['slug'] : '');
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -8,7 +48,18 @@ include 'koneksi.php';
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>DailyIn</title>
+  <base href="<?= e(base_path()) ?>" />
+  <title><?= e($page_title) ?></title>
+  <meta name="description" content="<?= e($page_description) ?>" />
+  <link rel="canonical" href="<?= e($canonical) ?>" />
+  <?php if ($search !== '') : ?><meta name="robots" content="noindex, follow" /><?php endif; ?>
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="DailyIn" />
+  <meta property="og:title" content="<?= e($page_title) ?>" />
+  <meta property="og:description" content="<?= e($page_description) ?>" />
+  <meta property="og:url" content="<?= e($canonical) ?>" />
+  <meta property="og:image" content="<?= e(site_url('img/banner.jpg')) ?>" />
+  <meta name="twitter:card" content="summary_large_image" />
   <link rel="icon" href="img/logo.png" />
   <link
     rel="stylesheet"
@@ -117,43 +168,98 @@ include 'koneksi.php';
   <!-- hero end -->
   <!-- article begin -->
   <section id="article" class="text-center p-3 p-sm-5">
+    <?php
+    // artikel yang sudah terbit (bukan draft, jadwal terbit sudah lewat)
+    $where = PUBLISHED_SQL;
+    $params = [now_string()];
+    if ($current_tag) {
+      $where .= " AND id IN (SELECT at.article_id FROM article_tag at JOIN tag t ON t.id = at.tag_id WHERE t.slug = ?)";
+      $params[] = $current_tag['slug'];
+    }
+    if ($search !== '') {
+      $like = '%' . addcslashes(mb_strtolower($search, 'UTF-8'), '%_\\') . '%';
+      $where .= " AND (LOWER(judul) LIKE ? OR LOWER(isi) LIKE ?)";
+      $params[] = $like;
+      $params[] = $like;
+    }
+    $hasil = db_all("SELECT * FROM article WHERE $where ORDER BY COALESCE(published_at, tanggal) DESC", $params);
+    $article_tags = tags_for_articles(array_column($hasil, 'id'));
+
+    // tag populer (hanya dari artikel yang sudah terbit)
+    $popular_tags = db_all(
+      "SELECT t.name, t.slug, COUNT(*) AS total FROM tag t
+       JOIN article_tag at ON at.tag_id = t.id JOIN article a ON a.id = at.article_id
+       WHERE a.status = 'published' AND (a.published_at IS NULL OR a.published_at <= ?)
+       GROUP BY t.id, t.name, t.slug ORDER BY total DESC, t.name LIMIT 12",
+      [now_string()]
+    );
+    ?>
     <div class="container">
       <h1 class="fw-bold display-4 pb-3">Article</h1>
 
-      <div class="row row-cols-1 row-cols-md-3 g-4 justify-content-center">
-        <?php
-        $sql = "SELECT * FROM article ORDER BY tanggal DESC";
-        $hasil = $conn->query($sql);
+      <!-- pencarian -->
+      <form class="row justify-content-center mb-3" method="get" action="<?= e(url()) ?>#article" role="search">
+        <div class="col-12 col-md-6">
+          <div class="input-group">
+            <input type="search" class="form-control" name="q" value="<?= e($search) ?>" placeholder="Cari artikel..." aria-label="Cari artikel" maxlength="100">
+            <button class="btn btn-primary" type="submit"><i class="bi bi-search"></i> Cari</button>
+          </div>
+        </div>
+      </form>
 
-        while ($row = $hasil->fetch_assoc()) {
-        ?>
+      <!-- tag -->
+      <?php if ($popular_tags) : ?>
+        <div class="mb-4 d-flex flex-wrap justify-content-center gap-2">
+          <a href="<?= e(url()) ?>#article" class="badge rounded-pill text-decoration-none <?= $current_tag ? 'text-bg-light border' : 'text-bg-primary' ?>">Semua</a>
+          <?php foreach ($popular_tags as $tag) : ?>
+            <a href="<?= e(url('tag/' . $tag['slug'])) ?>#article" class="badge rounded-pill text-decoration-none <?= $current_tag && $current_tag['slug'] === $tag['slug'] ? 'text-bg-primary' : 'text-bg-light border' ?>">#<?= e($tag['name']) ?> <span class="opacity-75">(<?= (int) $tag['total'] ?>)</span></a>
+          <?php endforeach; ?>
+        </div>
+      <?php endif; ?>
+
+      <?php if ($current_tag || $search !== '') : ?>
+        <p class="text-muted">
+          <?= count($hasil) ?> artikel
+          <?= $current_tag ? 'dengan tag <strong>#' . e($current_tag['name']) . '</strong>' : '' ?>
+          <?= $search !== '' ? 'untuk pencarian <strong>&ldquo;' . e($search) . '&rdquo;</strong>' : '' ?>
+          &middot; <a href="<?= e(url()) ?>#article">tampilkan semua</a>
+        </p>
+      <?php endif; ?>
+
+      <div class="row row-cols-1 row-cols-md-3 g-4 justify-content-center text-start">
+        <?php if (!$hasil) : ?>
+          <div class="col-12 text-center text-muted py-4">Belum ada artikel yang cocok.</div>
+        <?php endif; ?>
+        <?php foreach ($hasil as $row) : ?>
           <div class="col">
             <div class="card h-100">
-              <img src="img/<?= e($row["gambar"]) ?>" class="card-img-top" alt="<?= e($row["judul"]) ?>" />
-              <div class="card-body">
-                <h5 class="card-title"><?= e($row["judul"]) ?></h5>
-                <p class="card-text">
-                  <?= $row["summary"] != '' ? e($row["summary"]) : 'Artikel ini belum memiliki ringkasan.' ?>
-                </p>
-                <a href="#" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#articleModal" 
-                   data-id="<?= e($row["id"]) ?>"
-                   data-judul="<?= e($row["judul"]) ?>" 
-                   data-isi="<?= e(sanitize_html($row["isi"])) ?>"
-                   data-gambar="<?= e($row["gambar"]) ?>"
-                   data-tanggal="<?= e($row["tanggal"]) ?>">
-                   Baca Selengkapnya
+              <?php if (image_available($row["gambar"])) : ?>
+                <a href="<?= e(article_url($row)) ?>">
+                  <img src="<?= e(image_url($row["gambar"])) ?>" class="card-img-top" alt="<?= e($row["judul"]) ?>" loading="lazy" />
                 </a>
+              <?php endif; ?>
+              <div class="card-body">
+                <h5 class="card-title"><a href="<?= e(article_url($row)) ?>" class="text-reset text-decoration-none"><?= e($row["judul"]) ?></a></h5>
+                <p class="card-text">
+                  <?php $teaser = $row["summary"] != '' ? $row["summary"] : excerpt($row["isi"], 140); ?>
+                  <?= $teaser !== '' ? e($teaser) : 'Artikel ini belum memiliki ringkasan.' ?>
+                </p>
+                <?php foreach ($article_tags[(int) $row['id']] ?? [] as $tag) : ?>
+                  <a href="<?= e(url('tag/' . $tag['slug'])) ?>#article" class="badge text-bg-light border text-decoration-none me-1">#<?= e($tag['name']) ?></a>
+                <?php endforeach; ?>
               </div>
-              <div class="card-footer">
+              <div class="card-footer d-flex justify-content-between align-items-center">
                 <small class="text-body-secondary">
-                  <?= e($row["tanggal"]) ?>
+                  <?= e(display_date($row)) ?>
+                  <?php if (isset(MOODS[$row['mood'] ?? ''])) : ?>
+                    <span title="Mood: <?= e(MOODS[$row['mood']][1]) ?>" aria-label="Mood: <?= e(MOODS[$row['mood']][1]) ?>"><?= MOODS[$row['mood']][0] ?></span>
+                  <?php endif; ?>
                 </small>
+                <a href="<?= e(article_url($row)) ?>" class="btn btn-primary btn-sm">Baca Selengkapnya</a>
               </div>
             </div>
           </div>
-        <?php
-        }
-        ?>
+        <?php endforeach; ?>
       </div>
     </div>
   </section>
@@ -165,17 +271,16 @@ include 'koneksi.php';
       <div id="carouselExample" class="carousel slide">
         <div class="carousel-inner">
           <?php
-          $sql_gallery = "SELECT * FROM gallery ORDER BY tanggal DESC";
-          $hasil_gallery = $conn->query($sql_gallery);
+          $hasil_gallery = db_all("SELECT * FROM gallery ORDER BY tanggal DESC");
           $active = true;
-          while ($row_gallery = $hasil_gallery->fetch_assoc()) {
-            if ($row_gallery["gambar"] != '' && file_exists('img/' . $row_gallery["gambar"])) {
+          foreach ($hasil_gallery as $row_gallery) {
+            if (image_available($row_gallery["gambar"])) {
           ?>
               <div class="carousel-item <?php if ($active) {
                                           echo 'active';
                                           $active = false;
                                         } ?>">
-                <img src="img/<?= e($row_gallery["gambar"]) ?>" class="d-block w-100" alt="<?= e($row_gallery["judul"]) ?>" />
+                <img src="<?= e(image_url($row_gallery["gambar"])) ?>" class="d-block w-100" alt="<?= e($row_gallery["judul"]) ?>" />
               </div>
           <?php
             }
@@ -369,29 +474,6 @@ include 'koneksi.php';
   </footer>
   <!-- footer end -->
 
-  <!-- Modal Detail Artikel -->
-  <div class="modal fade" id="articleModal" tabindex="-1" aria-labelledby="exampleModalLabel" aria-hidden="true">
-    <div class="modal-dialog modal-lg">
-      <div class="modal-content">
-        <div class="modal-header">
-          <h1 class="modal-title fs-5" id="articleModalLabel">Judul Artikel</h1>
-          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-        </div>
-        <div class="modal-body">
-            <img src="" id="modalGambar" class="img-fluid mb-3 w-100 rounded" alt="Gambar Artikel">
-            <h6 class="text-muted mb-3" id="modalTanggal"></h6>
-            <div id="modalIsi" style="text-align: justify;"></div>
-        </div>
-        <div class="modal-footer">
-          <button type="button" class="btn btn-warning" id="btnBuatRingkasan">Buat Ringkasan ✨</button>
-          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Tutup</button>
-        </div>
-      </div>
-    </div>
-  </div>
-
-
-
   <script
     src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/js/bootstrap.bundle.min.js"
     integrity="sha384-FKyoEForCGlyvwx9Hj09JcYn3nv7wiPVlz7YYwJrWVcXK/BmnVDxM+D2scQbITxI"
@@ -431,111 +513,6 @@ include 'koneksi.php';
       html.setAttribute("data-bs-theme", "dark");
     });
 
-    // Script untuk mengisi data modal
-    const articleModal = document.getElementById('articleModal');
-    articleModal.addEventListener('show.bs.modal', event => {
-        // Tombol yang memicu modal
-        const button = event.relatedTarget;
-        
-        // Ambil data dari atribut data-bs-*
-        const id = button.getAttribute('data-id');
-        const judul = button.getAttribute('data-judul');
-        const isi = button.getAttribute('data-isi');
-        const gambar = button.getAttribute('data-gambar');
-        const tanggal = button.getAttribute('data-tanggal');
-
-        // Update isi modal
-        const modalTitle = articleModal.querySelector('.modal-title');
-        const modalBodyIsi = articleModal.querySelector('#modalIsi');
-        const modalBodyGambar = articleModal.querySelector('#modalGambar');
-        const modalBodyTanggal = articleModal.querySelector('#modalTanggal');
-
-        modalTitle.textContent = judul;
-        modalBodyIsi.innerHTML = isi; // Gunakan innerHTML agar tag HTML di isi (jika ada) ter-render
-        modalBodyGambar.src = "img/" + gambar;
-        modalBodyTanggal.textContent = "Diposting pada: " + tanggal;
-
-        // Setup tombol Buat Ringkasan (Inline Toggle)
-        const btnRingkasan = document.getElementById('btnBuatRingkasan');
-        
-        // Reset state tombol setiap kali modal dibuka
-        btnRingkasan.textContent = "Buat Ringkasan ✨";
-        btnRingkasan.className = "btn btn-warning";
-        
-        // Variabel untuk menyimpan state ringkasan di closure ini
-        let summaryContent = '';
-        const originalContent = isi; // Simpan konten asli
-
-        btnRingkasan.onclick = async function() {
-            // Cek text tombol untuk menentukan 'Mode'
-            if (btnRingkasan.textContent.includes("Buat Ringkasan")) {
-                
-                // Jika ringkasan belum ada, generate dulu
-                if (!summaryContent) {
-                    const originalBtnText = btnRingkasan.innerHTML;
-                    btnRingkasan.disabled = true;
-                    btnRingkasan.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Meringkas...';
-                    
-                    try {
-                        const response = await fetch('ai_helper.php', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({
-                                mode: 'generate_summary',
-                                id: id // server mengambil isi artikel dari database
-                            })
-                        });
-                        
-                        const data = await response.json();
-                        
-                        if (data.result) {
-                            // Format bullet points (hasil AI dimasukkan sebagai teks, bukan HTML, supaya tidak bisa menyisipkan script)
-                            const box = document.createElement('div');
-                            box.className = 'alert alert-info';
-                            const label = document.createElement('small');
-                            label.textContent = '⚡ Ringkasan AI:';
-                            box.appendChild(label);
-                            data.result.split('\n')
-                                .map(line => line.trim())
-                                .filter(line => line)
-                                .forEach(line => {
-                                    box.appendChild(document.createElement('br'));
-                                    box.appendChild(document.createTextNode(line));
-                                });
-                            summaryContent = box.outerHTML;
-                        } else if (data.error) {
-                            alert('AI Error: ' + data.error);
-                            btnRingkasan.disabled = false;
-                            btnRingkasan.innerHTML = originalBtnText;
-                            return; // Stop
-                        } else {
-                            alert('Gagal mengambil ringkasan.');
-                            btnRingkasan.disabled = false;
-                            btnRingkasan.innerHTML = originalBtnText;
-                            return; // Stop
-                        }
-                    } catch (error) {
-                        alert('Error: ' + error.message);
-                        btnRingkasan.disabled = false;
-                        btnRingkasan.innerHTML = originalBtnText;
-                        return; // Stop
-                    }
-                }
-                
-                // Tampilkan Ringkasan & Ubah Tombol
-                modalBodyIsi.innerHTML = summaryContent;
-                btnRingkasan.disabled = false;
-                btnRingkasan.textContent = "Kembali ke Artikel ↩️";
-                btnRingkasan.className = "btn btn-success";
-
-            } else {
-                // Mode 'Kembali ke Artikel'
-                modalBodyIsi.innerHTML = originalContent; // Restore asli
-                btnRingkasan.textContent = "Buat Ringkasan ✨";
-                btnRingkasan.className = "btn btn-warning";
-            }
-        };
-    });
   </script>
 </body>
 

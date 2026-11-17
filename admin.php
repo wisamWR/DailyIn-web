@@ -4,8 +4,6 @@ require_once "auth.php";
 //check jika belum ada user yang login arahkan ke halaman login (dan hentikan script)
 require_login();
 
-include "koneksi.php";
-
 // penanda bahwa halaman di-include lewat admin.php (bukan diakses langsung)
 define('DAILYIN_ADMIN', true);
 
@@ -15,6 +13,9 @@ $page = $_GET['page'] ?? 'dashboard';
 if (!in_array($page, $pages, true)) {
     $page = 'dashboard';
 }
+
+// pesan dari aksi sebelumnya (simpan/hapus), ditampilkan sebagai toast
+$flash = take_flash();
 ?>
 
 <!DOCTYPE html>
@@ -125,6 +126,20 @@ if (!in_array($page, $pages, true)) {
     </script>
     <!-- Summernote JS -->
     <script src="https://cdn.jsdelivr.net/npm/summernote@0.8.18/dist/summernote-lite.min.js"></script>
+    <?php if ($flash) : ?>
+        <!-- toast notifikasi -->
+        <div class="toast-container position-fixed top-0 end-0 p-3" style="z-index: 1100">
+            <div id="flashToast" class="toast align-items-center text-bg-<?= e($flash['type']) ?> border-0" role="alert" aria-live="assertive" aria-atomic="true" data-bs-delay="4000">
+                <div class="d-flex">
+                    <div class="toast-body"><?= e($flash['message']) ?></div>
+                    <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
+                </div>
+            </div>
+        </div>
+        <script>
+            bootstrap.Toast.getOrCreateInstance(document.getElementById('flashToast')).show();
+        </script>
+    <?php endif; ?>
 </body>
 
 </html>

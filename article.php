@@ -3,6 +3,7 @@ if (!defined('DAILYIN_ADMIN')) {
     http_response_code(403);
     exit;
 }
+require_once __DIR__ . '/article_fields.php';
 ?>
     <!-- Button trigger modal -->
     <button type="button" class="btn btn-secondary mb-2" data-bs-toggle="modal" data-bs-target="#modalTambah">
@@ -45,8 +46,9 @@ if (!defined('DAILYIN_ADMIN')) {
                                     </div>
                                 </div>
 
-                                <!-- Kolom Kanan: Sidebar (Caption & Gambar) -->
+                                <!-- Kolom Kanan: Sidebar (Status, Tag, Caption & Gambar) -->
                                 <div class="col-md-4 border-start">
+                                    <?php render_article_fields(); ?>
                                     <div class="mb-4">
                                         <div class="d-flex justify-content-between align-items-center mb-2">
                                             <label for="summaryResult" class="form-label small text-muted mb-0">CAPTION SOSMED</label>
@@ -96,8 +98,8 @@ if (!defined('DAILYIN_ADMIN')) {
     $(document).ready(function() {
         load_data();
 
-        // Initialize Summernote
-        $('#isiArtikel').summernote({
+        // Pengaturan Summernote, dipakai di form tambah dan form edit
+        var summernoteOptions = {
             tabsize: 2,
             height: 300,
             toolbar: [
@@ -109,7 +111,10 @@ if (!defined('DAILYIN_ADMIN')) {
                 ['insert', ['link', 'picture', 'video']],
                 ['view', ['fullscreen', 'codeview', 'help']]
             ]
-        });
+        };
+
+        // Initialize Summernote
+        $('#isiArtikel').summernote(summernoteOptions);
 
         function load_data(hlm) {
             $.ajax({
@@ -119,7 +124,12 @@ if (!defined('DAILYIN_ADMIN')) {
                     hlm: hlm
                 },
                 success: function(data) {
+                    // hapus editor lama sebelum tabel diganti, lalu aktifkan editor di setiap modal edit
+                    $('#article_data .summernote').each(function() {
+                        if ($(this).next('.note-editor').length) $(this).summernote('destroy');
+                    });
                     $('#article_data').html(data);
+                    $('#article_data .summernote').summernote(summernoteOptions);
                 }
             })
         }
@@ -200,12 +210,7 @@ if (!defined('DAILYIN_ADMIN')) {
         });
 
 
-        // 1. Generate Content di Edit Modal
-        // Note: Logic for Edit Modal might need similar Summernote updates if the edit modal uses a different ID or class for the textarea.
-        // Assuming 'textarea[name="isi"]' refers to the same element or a new one in a different modal. 
-        // If it's a dynamic modal (edit), standard summernote init might need to happen on modal show.
-        // For simplicity in this task, I will leave existing edit logic but warn that it needs Summernote support if it uses rich text too.
-        
+        // 1. Generate Content di Edit Modal (textarea edit sudah memakai Summernote)
         $(document).on('click', '.btn-kreasikan-edit', function() {
             var btn = $(this);
             var form = btn.closest('form');
@@ -239,6 +244,78 @@ if (!defined('DAILYIN_ADMIN')) {
                     btn.prop('disabled', false).html(originalText);
                 },
                 error: function(xhr, status, error) {
+                    alert('Gagal menghubungi AI Helper.');
+                    btn.prop('disabled', false).html(originalText);
+                }
+            });
+        });
+
+        // Saran tag dari AI (form tambah & edit)
+        $(document).on('click', '.btn-saran-tag', function() {
+            var btn = $(this);
+            var form = btn.closest('form');
+            var judul = form.find('input[name="judul"]').val();
+            var isiEl = form.find('textarea[name="isi"]');
+            var isi = isiEl.next('.note-editor').length ? $("<div/>").html(isiEl.summernote('code')).text() : isiEl.val();
+
+            if ($.trim(judul + ' ' + isi) === '') {
+                alert('Isi judul atau artikel terlebih dahulu!');
+                return;
+            }
+
+            var originalText = btn.html();
+            btn.prop('disabled', true).html('<span class="spinner-border spinner-border-sm"></span>');
+
+            $.ajax({
+                url: 'ai_helper.php',
+                type: 'POST',
+                contentType: 'application/json',
+                data: JSON.stringify({ text: isi || judul, title: judul, mode: 'generate_tags' }),
+                success: function(response) {
+                    if (response.result) {
+                        form.find('input[name="tags"]').val(response.result);
+                    } else if (response.error) {
+                        alert('AI Error: ' + response.error);
+                    }
+                    btn.prop('disabled', false).html(originalText);
+                },
+                error: function() {
+                    alert('Gagal menghubungi AI Helper.');
+                    btn.prop('disabled', false).html(originalText);
+                }
+            });
+        });
+
+        // Deteksi mood dari isi tulisan (form tambah & edit)
+        $(document).on('click', '.btn-deteksi-mood', function() {
+            var btn = $(this);
+            var form = btn.closest('form');
+            var judul = form.find('input[name="judul"]').val();
+            var isiEl = form.find('textarea[name="isi"]');
+            var isi = isiEl.next('.note-editor').length ? $("<div/>").html(isiEl.summernote('code')).text() : isiEl.val();
+
+            if ($.trim(isi) === '') {
+                alert('Isi artikel terlebih dahulu!');
+                return;
+            }
+
+            var originalText = btn.html();
+            btn.prop('disabled', true).html('<span class="spinner-border spinner-border-sm"></span>');
+
+            $.ajax({
+                url: 'ai_helper.php',
+                type: 'POST',
+                contentType: 'application/json',
+                data: JSON.stringify({ text: isi, title: judul, mode: 'generate_mood' }),
+                success: function(response) {
+                    if (response.result) {
+                        form.find('select[name="mood"]').val(response.result);
+                    } else if (response.error) {
+                        alert('AI Error: ' + response.error);
+                    }
+                    btn.prop('disabled', false).html(originalText);
+                },
+                error: function() {
                     alert('Gagal menghubungi AI Helper.');
                     btn.prop('disabled', false).html(originalText);
                 }
@@ -307,6 +384,30 @@ if (isset($_POST['simpan'])) {
     $gambar = '';
     $nama_gambar = $_FILES['gambar']['name'] ?? '';
 
+    //status & jadwal terbit (datetime-local "2026-11-20T08:00", zona waktu Asia/Jakarta)
+    $status = ($_POST['status'] ?? '') === 'draft' ? 'draft' : 'published';
+    $published_at = null;
+    $published_input = trim($_POST['published_at'] ?? '');
+    if ($published_input !== '' && strtotime($published_input)) {
+        $published_at = date('Y-m-d H:i:s', strtotime($published_input));
+    }
+    $id = isset($_POST['id']) ? (int) $_POST['id'] : 0;
+    $lama = $id ? db_one("SELECT gambar, published_at FROM article WHERE id = ?", [$id]) : null;
+    if ($published_at === null) {
+        //kosong: pakai tanggal terbit lama, atau sekarang jika baru diterbitkan
+        $published_at = $lama['published_at'] ?? null;
+        if ($published_at === null && $status === 'published') {
+            $published_at = now_string();
+        }
+    }
+
+    //mood entri jurnal (hanya nilai yang dikenal)
+    $mood = valid_mood($_POST['mood'] ?? '');
+
+    //slug URL: dari isian, atau otomatis dari judul (selalu dibuat unik)
+    $slug_input = trim($_POST['slug'] ?? '');
+    $slug = unique_slug($slug_input !== '' ? $slug_input : $judul, $id);
+
     //jika ada file yang dikirim
     if ($nama_gambar != '') {
         //panggil function upload_foto untuk cek spesifikasi file yg dikirimkan user
@@ -319,23 +420,16 @@ if (isset($_POST['simpan'])) {
             $gambar = $cek_upload['message'];
         } else {
             //jika false maka message berisi pesan error, tampilkan dalam alert
-            alert_redirect($cek_upload['message'], 'admin.php?page=article');
+            alert_redirect($cek_upload['message'], 'admin.php?page=article', 'danger');
             die;
         }
     }
 
     //cek apakah ada id yang dikirimkan dari form
-    if (isset($_POST['id'])) {
+    if ($id) {
         //jika ada id, lakukan update data dengan id tersebut
-        $id = (int) $_POST['id'];
-
         //nama gambar lama diambil dari database, bukan dari form (supaya tidak bisa dimanipulasi)
-        $stmt = $conn->prepare("SELECT gambar FROM article WHERE id = ?");
-        $stmt->bind_param("i", $id);
-        $stmt->execute();
-        $lama = $stmt->get_result()->fetch_assoc();
-        $stmt->close();
-        $gambar_lama = $lama['gambar'] ?? '';
+        $gambar_lama = (string) ($lama['gambar'] ?? '');
 
         if ($nama_gambar == '') {
             //jika tidak ganti gambar
@@ -343,43 +437,44 @@ if (isset($_POST['simpan'])) {
         }
 
         //ringkasan AI lama sudah tidak sesuai jika artikel diubah
-        $reset_ai = has_ai_summary_column($conn) ? ", ai_summary = NULL" : "";
+        $reset_ai = has_ai_summary_column() ? ", ai_summary = NULL" : "";
 
-        $stmt = $conn->prepare("UPDATE article
+        $simpan = db_run("UPDATE article
                                 SET
                                 judul =?,
+                                slug = ?,
                                 isi =?,
                                 summary = ?,
                                 gambar = ?,
                                 tanggal = ?,
-                                username = ?
+                                username = ?,
+                                status = ?,
+                                published_at = ?,
+                                mood = ?
                                 $reset_ai
-                                WHERE id = ?");
-
-        $stmt->bind_param("ssssssi", $judul, $isi, $summary, $gambar, $tanggal, $username, $id);
-        $simpan = $stmt->execute();
+                                WHERE id = ?", [$judul, $slug, $isi, $summary, $gambar, $tanggal, $username, $status, $published_at, $mood, $id]);
 
         //jika ganti gambar dan update berhasil, hapus gambar lama
         if ($simpan && $nama_gambar != '' && $gambar_lama != $gambar) {
-            delete_image($conn, $gambar_lama);
+            delete_image($gambar_lama);
         }
     } else {
         //jika tidak ada id, lakukan insert data baru
-        $stmt = $conn->prepare("INSERT INTO article (judul,isi,summary,gambar,tanggal,username)
-                                VALUES (?,?,?,?,?,?)");
+        $simpan = db_run("INSERT INTO article (judul,slug,isi,summary,gambar,tanggal,username,status,published_at,mood)
+                                VALUES (?,?,?,?,?,?,?,?,?,?)", [$judul, $slug, $isi, $summary, $gambar, $tanggal, $username, $status, $published_at, $mood]);
+        $id = $simpan ? (int) db_value("SELECT id FROM article WHERE slug = ?", [$slug]) : 0;
+    }
 
-        $stmt->bind_param("ssssss", $judul, $isi, $summary, $gambar, $tanggal, $username);
-        $simpan = $stmt->execute();
+    //simpan tag
+    if ($simpan && $id) {
+        save_article_tags($id, $_POST['tags'] ?? '');
     }
 
     if ($simpan) {
         alert_redirect('Simpan data sukses', 'admin.php?page=article');
     } else {
-        alert_redirect('Simpan data gagal', 'admin.php?page=article');
+        alert_redirect('Simpan data gagal', 'admin.php?page=article', 'danger');
     }
-
-    $stmt->close();
-    $conn->close();
 }
 
 //jika tombol hapus diklik
@@ -389,29 +484,19 @@ if (isset($_POST['hapus'])) {
     $id = (int) $_POST['id'];
 
     //ambil nama gambar dari database, bukan dari form
-    $stmt = $conn->prepare("SELECT gambar FROM article WHERE id = ?");
-    $stmt->bind_param("i", $id);
-    $stmt->execute();
-    $row = $stmt->get_result()->fetch_assoc();
-    $stmt->close();
+    $row = db_one("SELECT gambar FROM article WHERE id = ?", [$id]);
 
-    $stmt = $conn->prepare("DELETE FROM article WHERE id =?");
-
-    $stmt->bind_param("i", $id);
-    $hapus = $stmt->execute();
+    $hapus = db_run("DELETE FROM article WHERE id = ?", [$id]);
 
     if ($hapus && $row) {
         //hapus file gambar
-        delete_image($conn, $row['gambar']);
+        delete_image($row['gambar']);
     }
 
     if ($hapus) {
         alert_redirect('Hapus data sukses', 'admin.php?page=article');
     } else {
-        alert_redirect('Hapus data gagal', 'admin.php?page=article');
+        alert_redirect('Hapus data gagal', 'admin.php?page=article', 'danger');
     }
-
-    $stmt->close();
-    $conn->close();
 }
 ?>

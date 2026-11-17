@@ -2,10 +2,11 @@
 header('Content-Type: application/json');
 // Disable error reporting for JSON endpoint
 error_reporting(0);
+// Panggilan AI bisa lama; beri waktu lebih dari budget AI (lihat AI_TIME_BUDGET)
+set_time_limit(60);
 ini_set('display_errors', 0);
 
 require_once 'auth.php';
-require_once 'env.php';
 
 // ==================================================================
 // KONFIGURASI AI
@@ -18,14 +19,50 @@ if ($apiKey === '' && file_exists(__DIR__ . '/config_ai.php')) {
 }
 
 // Daftar model untuk dicoba (Fallback Strategy), bisa diganti lewat GEMINI_MODELS di .env
-// Prioritas: Model Ringan (Lite) -> Versi Latest -> Versi Stabil
-$models_to_try = array_filter(array_map('trim', explode(',', env('GEMINI_MODELS', 'gemini-2.5-flash-lite,gemini-flash-latest,gemini-2.5-flash'))));
+// Prioritas: Model Ringan (Lite, cepat) -> Versi Latest. Alias *-latest selalu menunjuk model terbaru,
+// jadi tidak 404 saat versi lama dihentikan Google
+$models_to_try = array_filter(array_map('trim', explode(',', env('GEMINI_MODELS', 'gemini-flash-lite-latest,gemini-flash-latest'))));
 
+/** @return never */
 function json_out($data, $code = 200)
 {
     http_response_code($code);
     echo json_encode($data);
     exit;
+}
+
+// Ubah Markdown sederhana (judul #, **tebal**, *miring*, daftar -, paragraf) menjadi HTML
+function markdown_to_html($text)
+{
+    $html = '';
+    foreach (preg_split('/\n\s*\n/', trim(str_replace("\r", '', $text))) as $block) {
+        $block = trim($block);
+        if ($block === '') continue;
+
+        $inline = function ($s) {
+            $s = htmlspecialchars($s, ENT_QUOTES, 'UTF-8');
+            $s = preg_replace('/\*\*(.+?)\*\*/s', '<strong>$1</strong>', $s);
+            return preg_replace('/(?<!\*)\*(?!\s)(.+?)(?<!\s)\*(?!\*)/s', '<em>$1</em>', $s);
+        };
+
+        if (preg_match('/^#{1,6}\s+(.+?)(?:\n(.*))?$/su', $block, $m)) {
+            // judul (tingkat berapa pun) menjadi <h2>, sisa blok menjadi paragraf
+            $html .= '<h2>' . $inline(trim($m[1], " #")) . "</h2>\n";
+            if (!empty($m[2]) && trim($m[2]) !== '') {
+                $html .= '<p>' . $inline(trim($m[2])) . "</p>\n";
+            }
+        } elseif (preg_match('/^\s*[-*•]\s+/u', $block)) {
+            $items = preg_split('/\n\s*[-*•]\s+/u', "\n" . $block);
+            $html .= "<ul>\n";
+            foreach ($items as $item) {
+                if (trim($item) !== '') $html .= '<li>' . $inline(trim(preg_replace('/^\s*[-*•]\s+/u', '', $item))) . "</li>\n";
+            }
+            $html .= "</ul>\n";
+        } else {
+            $html .= '<p>' . $inline(preg_replace('/\s*\n\s*/', ' ', $block)) . "</p>\n";
+        }
+    }
+    return $html;
 }
 
 // Kirim prompt ke Gemini, coba model satu per satu sampai berhasil
@@ -37,7 +74,16 @@ function ask_gemini($prompt, $mode, $apiKey, $models_to_try)
 
     $final_result = ['error' => 'Gagal menghubungi AI.'];
 
+    // Total waktu untuk semua model harus di bawah batas durasi function di Vercel
+    $deadline = microtime(true) + (int) env('AI_TIME_BUDGET', 45);
+
     foreach ($models_to_try as $model_name) {
+        $remaining = (int) floor($deadline - microtime(true));
+        if ($remaining < 5) {
+            $final_result = ['error' => 'AI terlalu lama merespons. Coba lagi sebentar lagi.'];
+            break;
+        }
+
         $url = "https://generativelanguage.googleapis.com/v1beta/models/" . rawurlencode($model_name) . ":generateContent";
 
         // Siapkan Payload Data
@@ -57,7 +103,10 @@ function ask_gemini($prompt, $mode, $apiKey, $models_to_try)
         curl_setopt($ch, CURLOPT_POST, true);
         curl_setopt($ch, CURLOPT_HTTPHEADER, ['Content-Type: application/json', 'x-goog-api-key: ' . $apiKey]);
         curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($payload));
-        curl_setopt($ch, CURLOPT_TIMEOUT, 60);
+        curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 10);
+        curl_setopt($ch, CURLOPT_TIMEOUT, min(30, $remaining));
+        // Beberapa container tidak punya jalur IPv6 keluar, jadi pakai IPv4 supaya tidak menggantung
+        curl_setopt($ch, CURLOPT_IPRESOLVE, CURL_IPRESOLVE_V4);
 
         // Verifikasi SSL tetap aktif. Untuk XAMPP di Windows yang tidak punya CA bundle,
         // isi CURL_CA_BUNDLE di .env dengan path file cacert.pem (lihat README)
@@ -70,6 +119,7 @@ function ask_gemini($prompt, $mode, $apiKey, $models_to_try)
         $response = curl_exec($ch);
         $err = curl_error($ch);
         $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        error_log(sprintf("Gemini %s: HTTP %d in %.1fs%s", $model_name, $http_code, curl_getinfo($ch, CURLINFO_TOTAL_TIME), $err ? " ($err)" : ''));
         curl_close($ch);
 
         if ($err) {
@@ -98,12 +148,18 @@ function ask_gemini($prompt, $mode, $apiKey, $models_to_try)
                 // Remove markdown code blocks jika ada
                 $generatedText = preg_replace('/```html|```/i', '', $generatedText);
 
-                // Pastikan minimal ada 2 <h2> dan 3 <p>
-                $h2_count = substr_count($generatedText, '<h2>');
-                $p_count = substr_count($generatedText, '<p>');
+                // Beberapa model menjawab dengan Markdown, bukan HTML: ubah dulu ke HTML
+                if (!preg_match('/<p[\s>]/i', $generatedText)) {
+                    $generatedText = markdown_to_html($generatedText);
+                }
+
+                // Pastikan minimal ada 2 <h2> dan 3 <p> (tag boleh punya atribut)
+                $h2_count = preg_match_all('/<h2[\s>]/i', $generatedText);
+                $p_count = preg_match_all('/<p[\s>]/i', $generatedText);
 
                 if ($h2_count < 2 || $p_count < 3) {
                     // Anggap model ini gagal, coba model berikutnya
+                    error_log("Gemini $model_name: struktur artikel kurang (h2=$h2_count, p=$p_count): " . mb_substr(preg_replace('/\s+/', ' ', $generatedText), 0, 200));
                     $final_result = ['error' => 'Artikel yang dihasilkan tidak memenuhi standar struktur.'];
                     continue;
                 }
@@ -150,21 +206,17 @@ $mode = $data['mode'] ?? '';
 // dan hasilnya disimpan supaya tidak memanggil AI berulang-ulang.
 // ==================================================================
 if ($mode === 'generate_summary') {
-    require_once 'koneksi.php';
-
     $id = (int) ($data['id'] ?? 0);
-    $cache = has_ai_summary_column($conn);
+    $cache = has_ai_summary_column();
 
-    $stmt = $conn->prepare("SELECT judul, isi" . ($cache ? ", ai_summary" : "") . " FROM article WHERE id = ?");
-    $stmt->bind_param("i", $id);
-    $stmt->execute();
-    $article = $stmt->get_result()->fetch_assoc();
-    $stmt->close();
+    $article = db_one("SELECT judul, isi, status, published_at" . ($cache ? ", ai_summary" : "") . " FROM article WHERE id = ?", [$id]);
 
-    if (!$article) {
+    // draft / terjadwal tidak boleh diringkas oleh pengunjung (isinya belum publik)
+    if (!$article || (!is_published($article) && !is_logged_in())) {
         json_out(['error' => 'Artikel tidak ditemukan'], 404);
     }
     if ($cache && !empty($article['ai_summary'])) {
+        log_ai_usage($mode, 'cache', true);
         json_out(['result' => $article['ai_summary'], 'cached' => true]);
     }
 
@@ -194,12 +246,10 @@ Isi: " . mb_substr($text, 0, 1000) . "...
 Buatkan ringkasan dalam format bullet points:";
 
     $hasil = ask_gemini($prompt, $mode, $apiKey, $models_to_try);
+    log_ai_usage($mode, $hasil['model_used'] ?? 'none', isset($hasil['result']));
 
     if (isset($hasil['result']) && $cache) {
-        $stmt = $conn->prepare("UPDATE article SET ai_summary = ? WHERE id = ?");
-        $stmt->bind_param("si", $hasil['result'], $id);
-        $stmt->execute();
-        $stmt->close();
+        db_run("UPDATE article SET ai_summary = ? WHERE id = ?", [$hasil['result'], $id]);
     }
     if (isset($hasil['error']) && strpos($hasil['error'], 'Maaf, kuota') === false) {
         // detail error Google hanya untuk admin, pengunjung cukup pesan umum
@@ -279,8 +329,63 @@ FORMAT OUTPUT (HTML):
 JUDUL ARTIKEL: \"" . mb_substr($text, 0, 200) . "\"
 
 Mulai menulis artikel sekarang, pastikan isinya 100% nyambung dengan judul di atas:";
+} else if ($mode == 'generate_tags') {
+    $prompt = "Kamu adalah editor blog yang memberi tag pada artikel.
+
+Tugas: Berikan 3 sampai 5 tag yang paling relevan untuk artikel berikut.
+
+ATURAN KETAT:
+- Tag dalam Bahasa Indonesia (istilah teknis boleh bahasa Inggris, misalnya PHP, AI)
+- Setiap tag 1-3 kata, tanpa tanda pagar (#)
+- Tulis dalam SATU baris, dipisahkan koma
+- JANGAN ada penjelasan atau teks lain
+
+JUDUL ARTIKEL: {$title}
+
+ISI ARTIKEL (potongan):
+" . mb_substr($text, 0, 1500) . "
+
+Tag:";
+} else if ($mode == 'generate_mood') {
+    $pilihan = implode(', ', array_keys(MOODS));
+    $prompt = "Kamu membaca entri jurnal harian dan menebak suasana hati penulisnya.
+
+Tugas: Pilih SATU mood yang paling menggambarkan perasaan penulis dalam tulisan berikut.
+
+PILIHAN (tulis persis salah satu kata ini, huruf kecil): {$pilihan}
+
+ATURAN KETAT:
+- Jawab hanya dengan satu kata dari pilihan di atas
+- JANGAN ada penjelasan atau tanda baca
+
+JUDUL: {$title}
+
+TULISAN (potongan):
+" . mb_substr($text, 0, 1500) . "
+
+Mood:";
 } else {
     json_out(['error' => 'Mode AI tidak dikenal'], 400);
 }
 
-json_out(ask_gemini($prompt, $mode, $apiKey, $models_to_try));
+$hasil = ask_gemini($prompt, $mode, $apiKey, $models_to_try);
+
+// rapikan saran tag: buang #, baris baru, duplikat (pakai aturan yang sama dengan penyimpanan tag)
+if ($mode == 'generate_tags' && isset($hasil['result'])) {
+    $hasil['result'] = implode(', ', parse_tags(str_replace(["\n", '#', '*'], [',', '', ''], $hasil['result'])));
+}
+
+// mood: ambil kata pilihan pertama yang muncul di jawaban AI
+if ($mode == 'generate_mood' && isset($hasil['result'])) {
+    $jawaban = mb_strtolower($hasil['result'], 'UTF-8');
+    $ketemu = null;
+    foreach (array_keys(MOODS) as $key) {
+        $pos = strpos($jawaban, $key);
+        if ($pos !== false && ($ketemu === null || $pos < $ketemu[1])) $ketemu = [$key, $pos];
+    }
+    $hasil = $ketemu ? ['result' => $ketemu[0], 'label' => mood_label($ketemu[0]), 'model_used' => $hasil['model_used']]
+                     : ['error' => 'AI tidak bisa menentukan mood dari tulisan ini.'];
+}
+
+log_ai_usage($mode, $hasil['model_used'] ?? 'none', isset($hasil['result']));
+json_out($hasil);

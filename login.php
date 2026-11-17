@@ -2,8 +2,6 @@
 //memulai session atau melanjutkan session yang sudah ada (cookie httponly + samesite)
 require_once "auth.php";
 
-//menyertakan code dari file koneksi
-include "koneksi.php";
 
 //check jika sudah ada user yang login arahkan ke halaman admin
 if (is_logged_in()) {
@@ -17,20 +15,17 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
   $username = trim($_POST['user'] ?? '');
   $password = $_POST['pass'] ?? '';
 
+  //terlalu banyak percobaan gagal dari IP ini untuk username ini: tolak dulu tanpa cek password
+  $locked = login_lock_remaining($username);
+  if ($locked > 0) {
+    header("location:login.php?locked=" . (int) ceil($locked / 60));
+    exit;
+  }
+
   //prepared statement, ambil hash password user
-  $stmt = $conn->prepare("SELECT id, username, password
-                          FROM user
-                          WHERE username=?");
-
-  //parameter binding
-  $stmt->bind_param("s", $username);
-
-  //database executes the statement
-  $stmt->execute();
-
-  //mengambil baris dari hasil sebagai array asosiatif
-  $row = $stmt->get_result()->fetch_assoc();
-  $stmt->close();
+  $row = db_one("SELECT id, username, password
+                  FROM " . USER_TABLE . "
+                  WHERE username = ?", [$username]);
 
   $valid = false;
   if ($row) {
@@ -48,13 +43,12 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 
   if ($valid && !empty($upgrade)) {
     $hash = password_hash($password, PASSWORD_DEFAULT);
-    $stmt = $conn->prepare("UPDATE user SET password = ? WHERE id = ?");
-    $stmt->bind_param("si", $hash, $row['id']);
-    $stmt->execute();
-    $stmt->close();
+    db_run("UPDATE " . USER_TABLE . " SET password = ? WHERE id = ?", [$hash, $row['id']]);
   }
 
   if ($valid) {
+    clear_login_failures($username);
+
     //ganti session id supaya tidak bisa session fixation
     session_regenerate_id(true);
     $_SESSION['username'] = $row['username'];
@@ -63,15 +57,14 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     //mengalihkan ke halaman admin
     header("location:admin.php");
   } else {
-    //perlambat percobaan brute force
+    //catat & perlambat percobaan brute force
+    record_login_failure($username);
     sleep(1);
 
     //jika tidak ada (gagal), alihkan kembali ke halaman login
     header("location:login.php?error=1");
   }
 
-  //menutup koneksi database
-  $conn->close();
   exit;
 }
 ?>
@@ -105,7 +98,9 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             <p>DailyIn Account</p>
             <hr />
           </div>
-          <?php if (isset($_GET['error'])) : ?>
+          <?php if (isset($_GET['locked'])) : ?>
+            <div class="alert alert-danger rounded-4 text-center py-2">Terlalu banyak percobaan login. Coba lagi dalam <?= max(1, (int) $_GET['locked']) ?> menit.</div>
+          <?php elseif (isset($_GET['error'])) : ?>
             <div class="alert alert-warning rounded-4 text-center py-2">Username atau password salah</div>
           <?php endif; ?>
           <form action="" method="post">

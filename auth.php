@@ -1,11 +1,69 @@
 <?php
 // Helper keamanan: session, cek login, CSRF token, escape output, sanitasi HTML
 
+require_once __DIR__ . '/koneksi.php';
+require_once __DIR__ . '/storage.php';
+require_once __DIR__ . '/content.php';
+require_once __DIR__ . '/journal.php';
+
+// Session disimpan di database (SESSION_DRIVER=database). Wajib di Vercel karena
+// tiap instance server punya folder sendiri, jadi session berbasis file akan hilang.
+class DbSessionHandler implements SessionHandlerInterface
+{
+    public function open($path, $name): bool
+    {
+        return true;
+    }
+
+    public function close(): bool
+    {
+        return true;
+    }
+
+    public function read($id): string|false
+    {
+        $lifetime = (int) ini_get('session.gc_maxlifetime');
+        $data = db_value("SELECT data FROM sessions WHERE id = ? AND updated_at > ?", [$id, time() - $lifetime]);
+        return $data === false ? '' : (string) base64_decode($data);
+    }
+
+    public function write($id, $data): bool
+    {
+        $sql = DB_DRIVER === 'pgsql'
+            ? "INSERT INTO sessions (id, data, updated_at) VALUES (?, ?, ?)
+               ON CONFLICT (id) DO UPDATE SET data = EXCLUDED.data, updated_at = EXCLUDED.updated_at"
+            : "INSERT INTO sessions (id, data, updated_at) VALUES (?, ?, ?)
+               ON DUPLICATE KEY UPDATE data = VALUES(data), updated_at = VALUES(updated_at)";
+        return db_run($sql, [$id, base64_encode($data), time()]);
+    }
+
+    public function destroy($id): bool
+    {
+        return db_run("DELETE FROM sessions WHERE id = ?", [$id]);
+    }
+
+    public function gc($max_lifetime): int|false
+    {
+        $stmt = db_query("DELETE FROM sessions WHERE updated_at < ?", [time() - $max_lifetime]);
+        return $stmt->rowCount();
+    }
+}
+
+// HTTPS langsung, atau di belakang proxy (Vercel meneruskan request lewat HTTP biasa)
+function is_https()
+{
+    return (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off')
+        || ($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '') === 'https';
+}
+
 if (session_status() === PHP_SESSION_NONE) {
+    if (env('SESSION_DRIVER') === 'database') {
+        session_set_save_handler(new DbSessionHandler(), true);
+    }
     session_set_cookie_params([
         'lifetime' => 0,
         'path'     => '/',
-        'secure'   => !empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off',
+        'secure'   => is_https(),
         'httponly' => true,
         'samesite' => 'Lax',
     ]);
@@ -67,35 +125,78 @@ function e($value)
 }
 
 // Pindah halaman lewat JS alert (pola yang sudah dipakai di halaman admin)
-function alert_redirect($message, $location)
+// Simpan pesan untuk ditampilkan sebagai notifikasi (toast) di halaman berikutnya, lalu pindah halaman.
+// $type: success | danger | warning
+function alert_redirect($message, $location, $type = 'success')
 {
-    echo "<script>
-        alert(" . json_encode($message) . ");
-        document.location=" . json_encode($location) . ";
-    </script>";
+    $_SESSION['flash'] = ['message' => (string) $message, 'type' => $type];
+    echo "<script>document.location=" . json_encode($location) . ";</script>";
+    echo '<noscript><meta http-equiv="refresh" content="0;url=' . e($location) . '"></noscript>';
 }
 
-// Hanya izinkan nama file gambar hasil upload (tanpa folder / "../")
-function safe_image_name($name)
+// Ambil pesan flash (sekali pakai)
+function take_flash()
 {
-    $name = basename((string) $name);
-    return preg_match('/^[A-Za-z0-9_\-]+\.(jpg|jpeg|png|gif|webp)$/i', $name) ? $name : '';
+    $flash = $_SESSION['flash'] ?? null;
+    unset($_SESSION['flash']);
+    return $flash;
 }
 
-// Hapus file gambar hanya jika namanya valid dan tidak dipakai lagi oleh artikel/gallery lain
-function delete_image($conn, $name)
+// IP pengunjung. Di Vercel request lewat proxy, jadi IP asli ada di header X-Real-IP / X-Forwarded-For
+function client_ip()
 {
-    $name = safe_image_name($name);
-    if ($name === '' || !is_file(__DIR__ . '/img/' . $name)) return;
+    if (env('VERCEL') !== '') {
+        $ip = $_SERVER['HTTP_X_REAL_IP'] ?? trim(explode(',', $_SERVER['HTTP_X_FORWARDED_FOR'] ?? '')[0]);
+        if (filter_var($ip, FILTER_VALIDATE_IP)) return $ip;
+    }
+    return $_SERVER['REMOTE_ADDR'] ?? '0.0.0.0';
+}
 
-    $stmt = $conn->prepare("SELECT (SELECT COUNT(*) FROM article WHERE gambar = ?) + (SELECT COUNT(*) FROM gallery WHERE gambar = ?) AS total");
-    $stmt->bind_param("ss", $name, $name);
-    $stmt->execute();
-    $total = (int) $stmt->get_result()->fetch_assoc()['total'];
-    $stmt->close();
+// Batas percobaan login: maksimal LOGIN_MAX_ATTEMPTS gagal per IP + username dalam LOGIN_WINDOW detik
+const LOGIN_MAX_ATTEMPTS = 5;
+const LOGIN_WINDOW = 900;
+
+// Sisa detik sampai boleh mencoba login lagi (0 = tidak terkunci)
+function login_lock_remaining($username)
+{
+    try {
+        $row = db_one(
+            "SELECT COUNT(*) AS total, MIN(attempted_at) AS oldest FROM login_attempts WHERE ip = ? AND username = ? AND attempted_at > ?",
+            [client_ip(), $username, time() - LOGIN_WINDOW]
+        );
+    } catch (PDOException $e) {
+        // tabel belum dibuat (lihat migrations/003_login_attempts.sql): jangan blokir login
+        error_log("login_attempts unavailable: " . $e->getMessage());
+        return 0;
+    }
+    if ((int) $row['total'] < LOGIN_MAX_ATTEMPTS) return 0;
+    return max(1, (int) $row['oldest'] + LOGIN_WINDOW - time());
+}
+
+function record_login_failure($username)
+{
+    db_run("INSERT INTO login_attempts (ip, username, attempted_at) VALUES (?, ?, ?)", [client_ip(), $username, time()]);
+    db_run("DELETE FROM login_attempts WHERE attempted_at < ?", [time() - 86400]);
+}
+
+function clear_login_failures($username)
+{
+    db_run("DELETE FROM login_attempts WHERE ip = ? AND username = ?", [client_ip(), $username]);
+}
+
+// Hapus file gambar hanya jika valid (file lokal di img/ atau URL Vercel Blob)
+// dan tidak dipakai lagi oleh artikel/gallery lain
+function delete_image($gambar)
+{
+    if ($gambar === null || $gambar === '' || image_url($gambar) === '') return;
+
+    $total = (int) db_value(
+        "SELECT (SELECT COUNT(*) FROM article WHERE gambar = ?) + (SELECT COUNT(*) FROM gallery WHERE gambar = ?)",
+        [$gambar, $gambar]
+    );
 
     if ($total === 0) {
-        unlink(__DIR__ . '/img/' . $name);
+        remove_image($gambar);
     }
 }
 

@@ -4,10 +4,13 @@ require_once "auth.php";
 //endpoint ini hanya untuk admin
 require_login_json();
 
-include "koneksi.php";
+require_once __DIR__ . '/article_fields.php';
+
+//artikel lama (sebelum migrasi 004) diberi slug otomatis
+backfill_slugs();
 
 $limit = 3;
-$total_records = (int) $conn->query("SELECT COUNT(*) AS total FROM article")->fetch_assoc()['total'];
+$total_records = (int) db_value("SELECT COUNT(*) FROM article");
 $jumlah_page = max(1, (int) ceil($total_records / $limit));
 
 //nomor halaman harus angka 1..jumlah_page
@@ -16,8 +19,8 @@ $hlm = min(max($hlm, 1), $jumlah_page);
 $limit_start = ($hlm - 1) * $limit;
 $no = $limit_start + 1;
 
-$sql = "SELECT * FROM article ORDER BY tanggal DESC LIMIT $limit_start, $limit";
-$hasil = $conn->query($sql);
+$hasil = db_all("SELECT * FROM article ORDER BY tanggal DESC LIMIT $limit OFFSET $limit_start");
+$article_tags = tags_for_articles(array_column($hasil, 'id'));
 ?>
 
 <!-- Table Article -->
@@ -33,18 +36,31 @@ $hasil = $conn->query($sql);
     </thead>
     <tbody>
         <?php
-        while ($row = $hasil->fetch_assoc()) {
+        foreach ($hasil as $row) {
         ?>
             <tr>
                 <td><?= $no++ ?></td>
                 <td>
                     <strong><?= e($row["judul"]) ?></strong>
+                    <br>
+                    <?php if (($row['status'] ?? 'published') === 'draft') : ?>
+                        <span class="badge text-bg-secondary">Draft</span>
+                    <?php elseif (!is_published($row)) : ?>
+                        <span class="badge text-bg-warning">Terjadwal <?= e(display_date($row)) ?></span>
+                    <?php else : ?>
+                        <span class="badge text-bg-success">Terbit</span>
+                    <?php endif; ?>
+                    <a href="<?= e(article_url($row)) ?>" target="_blank" class="small ms-1"><i class="bi bi-box-arrow-up-right"></i> Lihat</a>
+                    <br><small class="text-muted"><i class="bi bi-eye"></i> <?= (int) ($row['views'] ?? 0) ?>x dibaca<?= mood_label($row['mood'] ?? null) !== '' ? ' &middot; ' . e(mood_label($row['mood'])) : '' ?></small>
                     <br>pada : <?= e($row["tanggal"]) ?>
                     <br>oleh : <?= e($row["username"]) ?>
+                    <?php foreach ($article_tags[(int) $row['id']] ?? [] as $tag) : ?>
+                        <span class="badge text-bg-light border">#<?= e($tag['name']) ?></span>
+                    <?php endforeach; ?>
                 </td>
                 <td>
                     <?php
-                    $isi = $row["isi"];
+                    $isi = $row["isi"] ?? '';
                     $clean_isi = strip_tags($isi); // Bersihkan tag HTML untuk tampilan pendek
                     
                     if (mb_strlen($clean_isi) > 150) {
@@ -79,9 +95,9 @@ $hasil = $conn->query($sql);
                 <td>
                     <?php
                     if ($row["gambar"] != '') {
-                        if (file_exists('img/' . $row["gambar"] . '')) {
+                        if (image_available($row["gambar"])) {
                     ?>
-                            <img src="img/<?= e($row["gambar"]) ?>" width="100">
+                            <img src="<?= e(image_url($row["gambar"])) ?>" width="100">
                     <?php
                         }
                     }
@@ -126,8 +142,9 @@ $hasil = $conn->query($sql);
                                                 </div>
                                             </div>
 
-                                            <!-- Kolom Kanan: Sidebar (Caption & Gambar) -->
+                                            <!-- Kolom Kanan: Sidebar (Status, Tag, Caption & Gambar) -->
                                             <div class="col-md-4 border-start">
+                                                <?php render_article_fields($row, tags_string($article_tags[(int) $row['id']] ?? [])); ?>
                                                 <div class="mb-4">
                                                     <div class="d-flex justify-content-between align-items-center mb-2">
                                                         <label for="summaryResult" class="form-label small text-muted mb-0">CAPTION SOSMED</label>
@@ -146,9 +163,9 @@ $hasil = $conn->query($sql);
                                                     <label for="formGroupExampleInput3" class="form-label small text-muted">GAMBAR SAAT INI</label>
                                                     <?php
                                                     if ($row["gambar"] != '') {
-                                                        if (file_exists('img/' . $row["gambar"] . '')) {
+                                                        if (image_available($row["gambar"])) {
                                                     ?>
-                                                            <br><img src="img/<?= e($row["gambar"]) ?>" width="100" class="img-thumbnail mt-2">
+                                                            <br><img src="<?= e(image_url($row["gambar"])) ?>" width="100" class="img-thumbnail mt-2">
                                                     <?php
                                                         }
                                                     }
@@ -214,7 +231,7 @@ $hasil = $conn->query($sql);
             echo '<li class="page-item disabled"><a class="page-link" href="#">First</a></li>';
             echo '<li class="page-item disabled"><a class="page-link" href="#"><span aria-hidden="true">&laquo;</span></a></li>';
         } else {
-            $link_prev = ($hlm > 1) ? $hlm - 1 : 1;
+            $link_prev = $hlm - 1;
             echo '<li class="page-item halaman" id="1"><a class="page-link" href="#">First</a></li>';
             echo '<li class="page-item halaman" id="' . $link_prev . '"><a class="page-link" href="#"><span aria-hidden="true">&laquo;</span></a></li>';
         }

@@ -93,22 +93,20 @@ if (isset($_POST['simpan'])) {
             $gambar = $cek_upload['message'];
         } else {
             //jika false maka message berisi pesan error, tampilkan dalam alert
-            alert_redirect($cek_upload['message'], 'admin.php?page=gallery');
+            alert_redirect($cek_upload['message'], 'admin.php?page=gallery', 'danger');
             die;
         }
     }
 
     //prepared statement untuk insert data
-    $stmt = $conn->prepare("INSERT INTO gallery (judul, gambar, tanggal, username) VALUES (?, ?, ?, ?)");
-    $stmt->bind_param("ssss", $judul, $gambar, $tanggal, $username);
+    $simpan = db_run("INSERT INTO gallery (judul, gambar, tanggal, username) VALUES (?, ?, ?, ?)", [$judul, $gambar, $tanggal, $username]);
 
     //eksekusi query
-    if ($stmt->execute()) {
+    if ($simpan) {
         alert_redirect('Data berhasil disimpan', 'admin.php?page=gallery');
     } else {
-        alert_redirect('Data gagal disimpan', 'admin.php?page=gallery');
+        alert_redirect('Data gagal disimpan', 'admin.php?page=gallery', 'danger');
     }
-    $stmt->close();
 }
 
 //jika tombol simpan diklik untuk edit
@@ -132,30 +130,22 @@ if (isset($_POST['edit'])) {
             $gambar = $cek_upload['message'];
         } else {
             //jika false maka message berisi pesan error, tampilkan dalam alert
-            alert_redirect($cek_upload['message'], 'admin.php?page=gallery');
+            alert_redirect($cek_upload['message'], 'admin.php?page=gallery', 'danger');
             die;
         }
     }
 
     //prepared statement untuk update data
     if ($nama_gambar == '') {
-        $stmt = $conn->prepare("UPDATE gallery SET judul = ? WHERE id = ?");
-        $stmt->bind_param("si", $judul, $id);
-        $update = $stmt->execute();
+        $update = db_run("UPDATE gallery SET judul = ? WHERE id = ?", [$judul, $id]);
     } else {
         //nama gambar lama diambil dari database, bukan dari form
-        $stmt = $conn->prepare("SELECT gambar FROM gallery WHERE id = ?");
-        $stmt->bind_param("i", $id);
-        $stmt->execute();
-        $lama = $stmt->get_result()->fetch_assoc();
-        $stmt->close();
+        $lama = db_one("SELECT gambar FROM gallery WHERE id = ?", [$id]);
 
-        $stmt = $conn->prepare("UPDATE gallery SET judul = ?, gambar = ? WHERE id = ?");
-        $stmt->bind_param("ssi", $judul, $gambar, $id);
-        $update = $stmt->execute();
+        $update = db_run("UPDATE gallery SET judul = ?, gambar = ? WHERE id = ?", [$judul, $gambar, $id]);
 
         if ($update && $lama) {
-            delete_image($conn, $lama['gambar']);
+            delete_image($lama['gambar']);
         }
     }
 
@@ -163,9 +153,8 @@ if (isset($_POST['edit'])) {
     if ($update) {
         alert_redirect('Data berhasil diupdate', 'admin.php?page=gallery');
     } else {
-        alert_redirect('Data gagal diupdate', 'admin.php?page=gallery');
+        alert_redirect('Data gagal diupdate', 'admin.php?page=gallery', 'danger');
     }
-    $stmt->close();
 }
 
 //jika tombol hapus diklik
@@ -175,25 +164,18 @@ if (isset($_POST['hapus'])) {
     $id = (int) $_POST['id'];
 
     //ambil nama gambar dari database, bukan dari form
-    $stmt = $conn->prepare("SELECT gambar FROM gallery WHERE id = ?");
-    $stmt->bind_param("i", $id);
-    $stmt->execute();
-    $row = $stmt->get_result()->fetch_assoc();
-    $stmt->close();
+    $row = db_one("SELECT gambar FROM gallery WHERE id = ?", [$id]);
 
-    $stmt = $conn->prepare("DELETE FROM gallery WHERE id = ?");
-    $stmt->bind_param("i", $id);
-    $hapus = $stmt->execute();
+    $hapus = db_run("DELETE FROM gallery WHERE id = ?", [$id]);
 
     if ($hapus && $row) {
-        delete_image($conn, $row['gambar']);
+        delete_image($row['gambar']);
     }
 
     if ($hapus) {
         alert_redirect('Data berhasil dihapus', 'admin.php?page=gallery');
     } else {
-        alert_redirect('Data gagal dihapus', 'admin.php?page=gallery');
+        alert_redirect('Data gagal dihapus', 'admin.php?page=gallery', 'danger');
     }
-    $stmt->close();
 }
 ?>
